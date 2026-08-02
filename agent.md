@@ -47,12 +47,12 @@ If your runtime cannot install npm packages (CI sandbox, restricted agent runtim
 curl "https://api.settlemesh.io/v1/services/search?q=webpage+to+markdown"
 curl "https://api.settlemesh.io/v1/services/search?all=true&category=web-knowledge-services"
 
-# 2. Inspect the public contract (no key; inputs, pricing, examples)
-curl "https://api.settlemesh.io/v1/services/webpage.to_markdown"
+# 2. Inspect the selected public Unit contract by its exact search-result id
+curl "https://api.settlemesh.io/v1/services/ecosystem.webpage.to_markdown"
 
 # 3. Quote a public platform capability — anonymous and read-only
 curl -X POST -H "Content-Type: application/json" \
-  -d '{"capability_id":"webpage.to_markdown","input":{"url":"https://example.com"}}' \
+  -d '{"capability_id":"ecosystem.webpage.to_markdown","input":{"url":"https://example.com"}}' \
   "https://api.settlemesh.io/v1/billing/quote"
 
 # 4. Only after choosing an account-required action, provide a key.
@@ -61,7 +61,7 @@ export SETTLE_API_KEY="sk-settle-..."
 # 5. Invoke — the canonical prefix is /v1/capabilities/ (NOT /v1/tools/)
 curl -X POST -H "Authorization: Bearer $SETTLE_API_KEY" -H "Content-Type: application/json" \
   -d '{"input":{"url":"https://example.com"}}' \
-  "https://api.settlemesh.io/v1/capabilities/webpage.to_markdown/invoke"
+  "https://api.settlemesh.io/v1/capabilities/ecosystem.webpage.to_markdown/invoke"
 
 # 6. Your balance / ledger (developer account — works with an API key)
 curl -H "Authorization: Bearer $SETTLE_API_KEY" "https://api.settlemesh.io/v1/credits/balance"
@@ -71,8 +71,14 @@ curl -H "Authorization: Bearer $SETTLE_API_KEY" "https://api.settlemesh.io/v1/pi
 # → {"success":true,"data":{"ok":true,"account_id":"..."}}
 ```
 
+The older authenticated compatibility alias
+`https://api.settlemesh.io/v1/capabilities/webpage.to_markdown/invoke` may still be accepted for an
+existing client, but it is not canonical for the discover → show → quote → invoke main line. New
+clients must keep the exact search-result id, such as `ecosystem.webpage.to_markdown`, unchanged.
+
 HTTP-only gotchas (each one costs cold agents real time — read them now):
 
+- **Keep the selected catalog id unchanged for the whole journey.** Treat `entrypoints[].id` as an opaque canonical Unit id: copy it verbatim into show, quote, and invoke (for example, `ecosystem.webpage.to_markdown`). Do not shorten or reconstruct it. Older ids, when accepted, are compatibility aliases only and are not the discover → show → quote → invoke main line.
 - **There is no `/v1/whoami`.** Verify your key with `GET /v1/ping` (free; 200 = key works, 401 `invalid_api_key` = fix the key first). `whoami` exists only in the CLI; don't call `/v1/credits/balance` just to test connectivity.
 - **`POST /v1/capabilities/<id>/invoke` is the ONE canonical invoke path for ANY search-result id** — platform capabilities, published dynamic services, **hosted agents** (`agent_…`), and **worker offers** (`offer_…`) all execute through it. Take a search hit's `entrypoints[].id` and POST it verbatim (e.g. `ecosystem.article.summarize`, or a bare `agent_abc` / `offer_xyz`); you do NOT need to know whether it is a capability, agent, or worker, and you do NOT pass a "kind" — the platform resolves it and runs the same callability + billing checks. Don't guess `POST /v1/tools/<id>/invoke` — that exact path 404s; the canonical invoke is `POST /v1/capabilities/<id>/invoke` (`POST /v1/tools/<id>/call` is a compatibility alias only, and `GET /v1/tools/<id>` returns a tool's schema for inspection). A bare **app id** (`app_…`) is the exception: app commands are addressed by a composite `{app_id}/{command_id}` pair, so invoking an app id alone returns `app_command_scope_required` pointing you at `POST /v1/app-commands/{app_id}/{command_id}/invoke`. (`/v1/dynamic-services/<dsvc_id>/operations/<op>/invoke` is only for your own private draft dynamic service; once it is in search, use `/v1/capabilities/`.) Groups are not callable — never POST a group id as an invoke target.
 - **Handle the response by `execution.mode`** — the contract (from `GET /v1/services/<id>` or the tool spec) declares one of three modes so you never have to guess the response shape: `sync` → the result is in the response `data` envelope; `async` → the call returns a job; the tool spec's `wait` block (`GET /v1/tools/<id>` or `settlemesh tool show <id>`) carries the full poll contract — take the job id from one of `wait.id_paths`, `GET wait.poll_path` until `wait.status_path` reaches a terminal status, then read the result from `wait.result_paths` (`--wait`/`tool events <job-id>` do this for you); `agent` → a hosted-agent run whose output is under `data` and which may stream events. Don't assume one fixed shape across ids; branch on the declared mode and read result locations defensively.
@@ -131,6 +137,16 @@ Then inspect the selected service:
 settlemesh show <service-id> --json
 settlemesh tool show <tool-id> --json
 ```
+
+Use the selected search result's canonical `entrypoints[].id` unchanged across the complete Unit journey. For example:
+
+```bash
+settlemesh show ecosystem.webpage.to_markdown --json
+settlemesh quote ecosystem.webpage.to_markdown --input '{"url":"https://example.com"}' --json
+settlemesh call ecosystem.webpage.to_markdown --input '{"url":"https://example.com"}' --json
+```
+
+Do not shorten or rebuild a catalog id between commands. Older ids, when accepted, are compatibility aliases only; they are not the canonical main line.
 
 Then quote the exact paid call before invoking. A public platform capability quote through `POST /v1/billing/quote` does not require login or a key and remains read-only. Authenticate to quote an agent, worker offer, app endpoint, service unit, non-public target, or any payer-aware or call-chain request. An unauthenticated request for those targets fails with `anonymous_quote_target_restricted`:
 
@@ -238,7 +254,7 @@ settlemesh deploy logs <build-id> --json
 settlemesh deploy url <app-id> --json
 ```
 
-Queued, failed, `candidate_ready`, and preview records are not proof of serving production; a missing URL is not success. Destructive cleanup is separate: after a human separately confirms the exact app and outage effect, use `settlemesh apps delete <app-id> --confirm`. It takes the app offline at the user-facing record/routing layer and starts only a best-effort provider cleanup attempt; never run it automatically from recovery guidance or a browser.
+Queued, failed, `candidate_ready`, and preview records are not proof of serving production; a missing URL is not success. Destructive cleanup is separate: after a human separately confirms the exact app and outage effect, use `settlemesh apps delete <app-id> --confirm`. Today that command fails closed with `503 app_teardown_unavailable`: the app remains unchanged and no provider cleanup starts. Never run deletion automatically from recovery guidance or a browser.
 
 The packaging and runtime details below describe the intended pipeline after release authorization is available. They do not override the current fail-closed containment. SettleMesh is not a template generator; the managed full-stack build path targets **Next.js** through OpenNext for Cloudflare.
 
@@ -287,9 +303,13 @@ Only give the user a URL returned by a successful serving response or `settlemes
 
 **Platform-reserved paths.** The edge owns a few paths that never reach your container — notably **`/healthz`** (the Cloud Run health probe answers there with its own 404 page). Don't expose an app route at `/healthz`; every other path (including `/` and `/api/*`) reaches your handler normally.
 
-**Teardown.** `settlemesh apps delete <app-id> --confirm` (or `DELETE /v1/apps/{id}?confirm=true`) is **destructive**: the user-facing app/deployment records become unavailable/deleted, host routing is revoked, and a production app serving real traffic goes down. Because of that outage it is confirmation-gated (R18): without `--confirm` / `?confirm=true` it fails closed with `428 confirmation_required` and makes no record or provider change, so a headless/agent caller cannot dismantle a live app from one unconfirmed request.
+**Teardown.** `settlemesh apps delete <app-id> --confirm` (or `DELETE /v1/apps/{id}?confirm=true`) is **destructive** and confirmation-gated (R18): without `--confirm` / `?confirm=true` it fails closed with `428 confirmation_required` and makes no record or provider change. The owner route also fails closed with `503 app_teardown_unavailable` while durable admission, a single recovery owner, and exact provider-absence readback are not integrated; that response means the app was unchanged and no provider cleanup started. Do not retry it as though work were pending.
 
-A successful delete response proves only that the confirmed user request was accepted and the app/deployment records were projected unavailable/deleted; it does not prove that every Cloud Run, E2B, Cloudflare, custom-domain, secret, or CDN resource is absent. Provider cleanup is a best-effort attempt in the current implementation, not a durable user-visible `teardown_pending` completion contract. Treat an explicit provider absence readback as evidence only for that exact resource; otherwise keep cleanup `unknown`, preserve the app/deployment/provider identifiers, and use manual operator recovery. Do not report a repeat-delete `404 app_not_found` as provider cleanup evidence: it proves only that the app is already absent from the user-facing API.
+Compatibility behavior must remain conservative if an older deployment returns success instead of the current fail-closed response.
+
+A successful delete response proves only that the confirmed user request was accepted and the app/deployment records were projected unavailable/deleted; it does not prove that every Cloud Run, E2B, Cloudflare, custom-domain, secret, or CDN resource is absent. Provider cleanup is a best-effort attempt in that older behavior, not a durable user-visible `teardown_pending` completion contract. Treat an explicit provider absence readback as evidence only for that exact resource; otherwise keep cleanup `unknown`, preserve the app/deployment/provider identifiers, and use manual operator recovery. Do not report a repeat-delete `404 app_not_found` as provider cleanup evidence: it proves only that the app is already absent from the user-facing API.
+
+Once the durable coordinator is available, an accepted request returns a replayable operation with `status: teardown_pending`, `operation_id`, `delete_generation`, a canonical `inventory_plan_digest` plus `inventory_count`, the resource inventory, and one durable workflow `recovery_owner`. The app row must bind the same generation, operation, inventory plan, and recovery owner. New builds, deploys, command/API mutations and invocation/remix traffic are frozen for that app, while read-only app/deployment observation and completion/settlement of already-admitted work remain available. Repeating the confirmed DELETE observes the same operation; it must not start a second provider effect. `unknown` or `failed` is still non-serving and remains owned by that recovery operation. Only `status: deleted` together with a complete inventory, exact readback time, and `absent` for every recorded provider resource proves cleanup completion. Never infer provider absence from HTTP success, a process-local goroutine, or `404 app_not_found`.
 
 App deletion does **NOT** cascade-delete a database/project that `--full-stack` auto-provisioned — that project stays `active` and billable. Delete it separately only after its own destructive confirmation, using `settlemesh db delete <project-id>` (list projects with `settlemesh projects list`) or `DELETE /v1/projects/{project-id}`; its own recovery/readback contract remains independent of app cleanup.
 
@@ -418,7 +438,7 @@ Always call the platform at `SETTLEMESH_BASE_URL` (the `api.` host — it surviv
 **Object storage** (always injected; namespaced per app): all calls use `Authorization: Bearer {SETTLEMESH_APP_API_KEY}`. The namespace is determined by the **authenticating key**, not by any header: the injected runtime key (`SETTLEMESH_APP_API_KEY`) scopes you to `apps/<app_id>/`, so your app only ever sees its own objects. (A plain account/owner key used directly — e.g. while testing from the CLI — is namespaced per-owner under `apps/owner-<owner_id>/` instead; deployed apps always use the runtime key, so this only matters for ad-hoc testing.)
 - Write: `PUT {SETTLEMESH_BASE_URL}/v1/storage/objects/<key>` with the file bytes as the body (`Content-Type` sets the stored type).
 - **Read: `GET {SETTLEMESH_BASE_URL}/v1/storage/objects/<key>`** — streams the bytes back directly (Bearer-auth). Add `?presign=true` (or `POST /v1/storage/sign {"key":"..."}`) only if you want a short-lived shareable URL instead of the bytes.
-- List: `GET {SETTLEMESH_BASE_URL}/v1/storage/objects?prefix=&limit=`. `DELETE .../objects/<key>` is an **immediate, irreversible provider-level delete**: it calls the storage provider's delete directly and returns only `{"success": true}`. There is no tombstone, no recovery receipt, and no restore endpoint — the object bytes are gone. Copy anything you may need before deleting. Deletion also does not revoke an already-issued short-lived URL, which stays valid until its own TTL expires.
+- List: `GET {SETTLEMESH_BASE_URL}/v1/storage/objects?prefix=&limit=`. `DELETE .../objects/<key>` is an **immediate, irreversible provider-level delete**: it calls the storage provider's delete directly and answers `{"success": true, "data": {"delete_mode": "irreversible_provider_delete", "recoverable": false, ...}}` — the response states the irreversibility in machine-readable form. There is no tombstone, no recovery receipt, and no restore endpoint; the object bytes are gone. Copy anything you may need before deleting. Deletion also does not revoke an already-issued short-lived URL, which stays valid until its own TTL expires.
 
 ### Wire one service to another with `@app:` (don't hardcode sibling URLs)
 
@@ -486,7 +506,7 @@ settlemesh open <command-ref> --input '{...}'   # open an app command's web/hand
 
 Give the returned URL to the user, then poll `handoff get` for the result.
 
-**If the provider is your own endpoint/app, it must speak the handoff webhook contract.** On `handoff create` the platform POSTs the session (JSON body; headers include `X-Settle-Handoff-Session`, `X-Settle-Caller-Account`, and an HMAC `X-Settle-Handoff-Signature: sha256=<hex>`) to the provider — an app provider receives it at `{app base}/api/handoff/sessions`. The endpoint MUST respond with JSON containing **`continuation_url`** (top-level, or nested under `data`) — the human-facing URL the platform hands back to the caller. Any response without `continuation_url` fails the create with `handoff endpoint did not return continuation_url`. A relative `continuation_url` is resolved against the provider's base URL. The webhook body is exactly `{session_id, action_id, input, metadata, expires_at}`. **There is currently no provider completion callback.** The platform does not send a `completion` object, does not mint a provider redeem token, and does not expose a public `POST /handoff/{id}/redeem`; the only redeem route requires a platform-internal token an external provider never holds. Consequently a provider can show its page via `continuation_url`, but **cannot close the session** — it stays `ready` until its TTL expires. Do not build against a redeem callback yet.
+**If the provider is your own endpoint/app, it must speak the handoff webhook contract.** On `handoff create` the platform POSTs the session (JSON body; headers include `X-Settle-Handoff-Session`, `X-Settle-Caller-Account`, and an HMAC `X-Settle-Handoff-Signature: sha256=<hex>`) to the provider — an app provider receives it at `{app base}/api/handoff/sessions`. The endpoint MUST respond with JSON containing **`continuation_url`** (top-level, or nested under `data`) — the human-facing URL the platform hands back to the caller. Any response without `continuation_url` fails the create with `handoff endpoint did not return continuation_url`. A relative `continuation_url` is resolved against the provider's base URL. The webhook body is exactly `{session_id, action_id, input, metadata, expires_at}`. **There is currently no provider completion callback.** The platform does not send a `completion` object, does not mint a provider redeem token, and does not expose a public `POST /handoff/{id}/redeem`; the only redeem route is `POST /internal/v1/handoff/sessions/{id}/redeem`, which requires a platform-internal token an external provider never holds. Consequently a provider can show its page via `continuation_url`, but **cannot close the session** — it stays `ready` until its TTL expires. Do not build against a redeem callback yet. For a paid `app-command` that routes through `needs_handoff`, this also means the hold is not captured by the provider path and is released by the settlement reaper.
 
 ## Publish Your Own Service (wrap any API → a searchable, billable SettleMesh service)
 
@@ -581,6 +601,23 @@ settlemesh friend list [--pending]              # accepted friends; --pending sh
 settlemesh friend remove bob@example.com              # unfriend — immediately revokes their access to your friends offers
 settlemesh friend block spammer@example.com           # block (prevents requests/calls); `friend unblock` reverses it
 ```
+
+Send text to an existing Conversation, or read incoming work from the same Conversation authority.
+`msg send` does not create a Conversation or a second message store; it returns the canonical Message
+identity from the existing Conversation Action. `inbox` derives unread counts from the server-owned
+monotonic read cursor; it is a polling projection, not a second notification store or an online-presence
+signal. Open the exact conversation before advancing only a sequence you observed:
+
+```bash
+settlemesh msg send <conversation-id> --text "Please review the release." --json
+settlemesh inbox --limit 20 --json
+settlemesh msg list <conversation-id> --after 0 --limit 100 --json
+settlemesh msg read <conversation-id> <observed-sequence> --json
+settlemesh inbox --json  # authoritative unread readback; repeated read cannot move the cursor backward
+```
+
+An unknown conversation and a conversation you no longer belong to both fail closed as not found. Do
+not retry a failed read by guessing a later sequence; list again and use an observed sequence.
 
 Then lend to ALL accepted friends in one shot (no per-caller `--allow`):
 
