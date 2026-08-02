@@ -621,13 +621,17 @@ included automatically. Every initial or added member still passes the server-ow
 only the group owner can add or remove another member. A newly added member sees messages from their
 joined membership generation onward, not earlier history.
 
-The current group lifecycle CLI is exactly `create`, `add`, `remove`, and `leave`; do not invent
-`group list`, `group show`, or `group send` aliases. Use the returned Conversation id with `inbox`
-and `msg` below. Removing a member or leaving is a direct authenticated revocation and needs no
-second confirmation. The owner must remove every other active member before leaving:
+The current group lifecycle CLI is exactly `create`, `list`, `add`, `remove`, and `leave`; do not
+invent `group show` or `group send` aliases. `group list` reads the authoritative inbox, filters out
+DMs, and owns no membership or unread cache: removal or leave makes the group disappear on the next
+read. A result with `complete:false` reached the 500-conversation server window; the server has no
+pagination yet, so it is not a complete enumeration. Inspect that raw window with `inbox` or use a
+known Conversation id. Removing a member or leaving is a direct authenticated revocation and needs
+no second confirmation. The owner must remove every other active member before leaving:
 
 ```bash
 settlemesh group create <group-id> --member <owner-id> [--member <owner-id> ...] --json
+settlemesh group list --json
 settlemesh group add <group-id> <owner-id> --json
 settlemesh group remove <group-id> <owner-id> --json
 settlemesh group leave <group-id> --json
