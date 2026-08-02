@@ -602,6 +602,25 @@ settlemesh friend remove bob@example.com              # unfriend — immediately
 settlemesh friend block spammer@example.com           # block (prevents requests/calls); `friend unblock` reverses it
 ```
 
+Create a group Conversation only from accepted trust identities. In `friend list --json`, use the
+other side's stable `requester` or `addressee_owner` value from an accepted edge; do not substitute
+an email address for a group member owner id. The authenticated creator is read from the server and
+included automatically. Every initial or added member still passes the server-owned trust gate, and
+only the group owner can add or remove another member. A newly added member sees messages from their
+joined membership generation onward, not earlier history.
+
+The current group lifecycle CLI is exactly `create`, `add`, `remove`, and `leave`; do not invent
+`group list`, `group show`, or `group send` aliases. Use the returned Conversation id with `inbox`
+and `msg` below. Removing a member or leaving is a direct authenticated revocation and needs no
+second confirmation. The owner must remove every other active member before leaving:
+
+```bash
+settlemesh group create <group-id> --member <owner-id> [--member <owner-id> ...] --json
+settlemesh group add <group-id> <owner-id> --json
+settlemesh group remove <group-id> <owner-id> --json
+settlemesh group leave <group-id> --json
+```
+
 Send text to an existing Conversation, or read incoming work from the same Conversation authority.
 `msg send` does not create a Conversation or a second message store; it returns the canonical Message
 identity from the existing Conversation Action. `inbox` derives unread counts from the server-owned
