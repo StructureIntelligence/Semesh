@@ -560,9 +560,21 @@ The `<operation_id>` is **slugified/lowercased** from your OpenAPI `operationId`
 settlemesh agents create --name helper --template hermes --public --max-budget 50 --allowed-capabilities web.search,web.scrape,llm.chat --json
 settlemesh agents invoke agent_123 --input '{"prompt":"hello"}' --json
 settlemesh agents deploy agent_123 --project ./agent-dir --json
+settlemesh agents pause agent_123 --json
+settlemesh agents get agent_123 --json
+settlemesh agents resume agent_123 --json
+settlemesh agents reconcile agent_123 --json
 ```
 
 Templates differ in setup: **`hermes` auto-deploys a version on create** (invokable immediately, as above), while `simple_workflow` needs its own deployed version before the first invoke — if you just want a working agent fast, use `hermes`. Delete a hosted agent you no longer need with `DELETE /v1/agents/{agent_id}` (or `settlemesh agents delete <agent-id>` on a current CLI — older installs lack the subcommand, the HTTP route always works): it stops listing and invoking, while its invocation history stays readable for billing audit.
+
+`agents get` is the authoritative read used for lifecycle recovery. It sends one GET, changes neither Agent source nor Catalog state, and prints only after a bounded response proves the exact Agent identity and a valid source status. It reports Agent source state only; it does **not** prove the current Catalog discovery state.
+
+`agents pause` commits the owned Agent's source status as paused, blocks new invocation, and synchronizes withdrawal of any active Catalog slice while retaining invocation history and billing audit. `agents resume` commits the source status as active and synchronizes only the Catalog projection for which the current Agent and latest version remain eligible; resume alone does not make an ineligible or private Agent discoverable. A successful pause or resume response is returned only after Catalog synchronization completes, and the CLI prints it only after the exact Agent and requested source status pass validation. Pause and resume each send one POST at most, and the CLI never automatically replays either mutation after a lost response or an untrusted 2xx.
+
+If a pause or resume response is lost or untrusted, its source outcome is unknown: run `agents get <agent-id> --json` to read the authoritative source, use normal Search/discovery readback when Catalog visibility matters, and explicitly reconcile a stale projection instead of repeating the source mutation to force a green result. `active_catalog_unavailable` can mean the source mutation already committed, so wait for Catalog authority and use the returned reconcile action rather than replaying pause or resume. `agent_mutation_conflict` means the rejected mutation raced with another source change: GET the exact Agent, merge the current state with the intended change, and create a new explicit mutation.
+
+`agents reconcile` does not change the Agent source state. It reads that authoritative state and projects it back into the active Catalog after a partial lifecycle/publication result. Reconcile also sends one POST at most and prints success only after the response proves the exact Agent and `reconciled:true`. If its response is lost, read source with `agents get`, inspect Catalog state through normal Search/discovery rather than treating `get` as Catalog proof, then explicitly decide whether another reconcile is needed.
 
 An invoke returns the invocation in `data`. If the agent ran cleanly but did not finish the task within its step budget, you get **HTTP 200 with `success:false` and `data.output.error: "max_steps_exceeded"`** — that is a graceful stop, not a platform error; read `data.output`/`data.events`, then re-invoke with a higher step budget: pass `--max-steps 20` (CLI) or include `"max_steps": 20` in the invoke input object (the runtime reads `max_steps` from the input, overriding the version default). A genuine infrastructure failure (sandbox crash, timeout) returns 502 — and note a 502 body may be a non-JSON HTML edge page, so treat a non-JSON 502 as a transient infra error to retry, not a readable result.
 
