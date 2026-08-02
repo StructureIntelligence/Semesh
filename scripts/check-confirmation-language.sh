@@ -24,8 +24,9 @@ legal_independence='confirmation cannot turn an unavailable Legal state into PAS
 deployment_availability='subject to live server/preflight availability'
 deployment_authorization_unavailable='deployment_authorization_unavailable'
 cleanup_response_truth='A successful delete response proves only that the confirmed user request was accepted and the app/deployment records were projected unavailable/deleted; it does not prove that every Cloud Run, E2B, Cloudflare, custom-domain, secret, or CDN resource is absent.'
-cleanup_durability_truth='Provider cleanup is a best-effort attempt in the current implementation, not a durable user-visible `teardown_pending` completion contract.'
+cleanup_durability_truth='Provider cleanup is a best-effort attempt in that older behavior, not a durable user-visible `teardown_pending` completion contract.'
 cleanup_recovery_truth='Treat an explicit provider absence readback as evidence only for that exact resource; otherwise keep cleanup `unknown`, preserve the app/deployment/provider identifiers, and use manual operator recovery.'
+cleanup_current_fail_closed_truth='The owner route also fails closed with `503 app_teardown_unavailable` while durable admission, a single recovery owner, and exact provider-absence readback are not integrated; that response means the app was unchanged and no provider cleanup started.'
 
 projections=(
   agent.md
@@ -506,9 +507,11 @@ done
 require_text agent.md 'settlemesh apps delete <app-id> --confirm'
 require_text agent.md '428 confirmation_required'
 require_text agent.md 'agent must STOP here — never auto-pay'
+require_text agent.md 'settlemesh msg send <conversation-id> --text "Please review the release." --json'
 require_text agent.md "$cleanup_response_truth"
 require_text agent.md "$cleanup_durability_truth"
 require_text agent.md "$cleanup_recovery_truth"
+require_text agent.md "$cleanup_current_fail_closed_truth"
 for required_deploy_truth in \
   'settlemesh deploy preflight . --full-stack --json' \
   'admission.can_start_now' \
