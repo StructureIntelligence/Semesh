@@ -582,7 +582,21 @@ An invoke returns the invocation in `data`. If the agent ran cleanly but did not
 
 ```bash
 settlemesh worker start --name local-model --public --model local/model --endpoint http://localhost:11434/v1/chat/completions --credits-per-second 0.05
+settlemesh worker status <worker-id> --json
+settlemesh worker pause <worker-id> --json
+settlemesh worker resume <worker-id> --json
 ```
+
+`worker status` is an owner-only exact read. A foreign or missing worker id is reported as
+`worker_not_found`, and the CLI prints only after a bounded response proves the requested worker id
+and a valid lifecycle state. Heartbeat freshness is applied at read time: a stale heartbeat is
+reported as `offline` with `accepting_jobs:false` without persisting that projected state.
+
+`worker pause` stores a sticky drain intent. The poller keeps heartbeating but takes no new leases;
+jobs leased before pause may finish. Ordinary and metadata-bearing heartbeats cannot clear pause or
+stop. Only explicit `worker resume` clears pause. Stop retires that exact worker id and cannot be
+cleared by heartbeat, resume, or same-id registration; run `worker start` again to register a new
+worker id. These lifecycle acknowledgements do not prove global cross-replica linearizability.
 
 Other users can find published public worker offers through service search.
 
