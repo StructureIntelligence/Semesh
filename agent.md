@@ -669,14 +669,21 @@ Send text to an existing Conversation, or read incoming work from the same Conve
 `msg send` does not create a Conversation or a second message store; it returns the canonical Message
 identity from the existing Conversation Action. `inbox` derives unread counts from the server-owned
 monotonic read cursor; it is a polling projection, not a second notification store or an online-presence
-signal. Open the exact conversation before advancing only a sequence you observed:
+signal. `msg unread` reads one exact Conversation from a single authenticated 500-item inbox window,
+validates the whole window before printing, and reports `last_sequence`, the actor `read_cursor`, the
+derived `unread_count`, and `inbox_window_complete`; it does not advance the cursor or send a follow-up
+mutation. A target missing from fewer than 500 items is not currently accessible. A target missing from
+a full 500-item window fails incomplete instead of reporting a false zero; a matched target in that full
+window is exact but reports `inbox_window_complete:false`. Open the exact conversation before advancing
+only a sequence you observed:
 
 ```bash
 settlemesh msg send <conversation-id> --text "Please review the release." --json
 settlemesh inbox --limit 20 --json
 settlemesh msg list <conversation-id> --after 0 --limit 100 --json
+settlemesh msg unread <conversation-id> --json
 settlemesh msg read <conversation-id> <observed-sequence> --json
-settlemesh inbox --json  # authoritative unread readback; repeated read cannot move the cursor backward
+settlemesh msg unread <conversation-id> --json  # exact authoritative readback; repeated read cannot move the cursor backward
 ```
 
 To send an attachment, first upload a private File asset, then pass its stable `data.id` to `msg
