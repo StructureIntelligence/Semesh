@@ -582,7 +582,21 @@ An invoke returns the invocation in `data`. If the agent ran cleanly but did not
 
 ```bash
 settlemesh worker start --name local-model --public --model local/model --endpoint http://localhost:11434/v1/chat/completions --credits-per-second 0.05
+settlemesh worker status <worker-id> --json
+settlemesh worker pause <worker-id> --json
+settlemesh worker resume <worker-id> --json
 ```
+
+`worker status` is an owner-only exact read. A foreign or missing worker id is reported as
+`worker_not_found`, and the CLI prints only after a bounded response proves the requested worker id
+and a valid lifecycle state. Heartbeat freshness is applied at read time: a stale heartbeat is
+reported as `offline` with `accepting_jobs:false` without persisting that projected state.
+
+`worker pause` stores a sticky drain intent. The poller keeps heartbeating but takes no new leases;
+jobs leased before pause may finish. Ordinary and metadata-bearing heartbeats cannot clear pause or
+stop. Only explicit `worker resume` clears pause. Stop retires that exact worker id and cannot be
+cleared by heartbeat, resume, or same-id registration; run `worker start` again to register a new
+worker id. These lifecycle acknowledgements do not prove global cross-replica linearizability.
 
 Other users can find published public worker offers through service search.
 
@@ -621,20 +635,34 @@ included automatically. Every initial or added member still passes the server-ow
 only the group owner can add or remove another member. A newly added member sees messages from their
 joined membership generation onward, not earlier history.
 
-The current group lifecycle CLI is exactly `create`, `list`, `add`, `remove`, and `leave`; do not
-invent `group show` or `group send` aliases. `group list` reads the authoritative inbox, filters out
-DMs, and owns no membership or unread cache: removal or leave makes the group disappear on the next
-read. A result with `complete:false` reached the 500-conversation server window; the server has no
-pagination yet, so it is not a complete enumeration. Inspect that raw window with `inbox` or use a
-known Conversation id. Removing a member or leaving is a direct authenticated revocation and needs
-no second confirmation. The owner must remove every other active member before leaving:
+The current group CLI is exactly `create`, `list`, `show`, `add`, `remove`, `leave`, `send`,
+`messages`, `read`, and `unread`. The five exact-target result commands `show`, `send`, `messages`,
+`read`, and `unread` first prove that the requested id is a currently accessible group in the
+authenticated 500-conversation inbox window; a DM, an inaccessible group, or a target missing from a
+full window fails closed before any effect. `group list`, `show`, and
+`unread` read that authoritative inbox and own no membership, message, cursor, or unread cache:
+removal or leave makes all five exact-target commands unavailable on the next read. A result with
+`complete:false` reached the 500-conversation server window; the server has no pagination yet, so it
+is not a complete enumeration. If a full 500-item window omits the target, the lookup is incomplete
+and no follow-up Action is sent. If the target is present in that full window, the matched item is
+exact; `group unread` may still report `inbox_window_complete:false` because only the surrounding
+enumeration is incomplete. Recover by inspecting `settlemesh inbox --limit 500 --json`; do not guess
+a group id. Removing a member or leaving is a direct authenticated revocation and needs no second
+confirmation. The owner must remove every other active member before leaving. Group
+messaging and read cursors still use the canonical Conversation Actions, which recheck membership at
+their effect seam; `group send` is text-only, so use `msg send` for attachments:
 
 ```bash
 settlemesh group create <group-id> --member <owner-id> [--member <owner-id> ...] --json
 settlemesh group list --json
+settlemesh group show <group-id> --json
 settlemesh group add <group-id> <owner-id> --json
 settlemesh group remove <group-id> <owner-id> --json
 settlemesh group leave <group-id> --json
+settlemesh group send <group-id> --text "Release ready." --json
+settlemesh group messages <group-id> --after 0 --limit 100 --json
+settlemesh group read <group-id> <observed-sequence> --json
+settlemesh group unread <group-id> --json
 ```
 
 Send text to an existing Conversation, or read incoming work from the same Conversation authority.
@@ -650,6 +678,25 @@ settlemesh msg list <conversation-id> --after 0 --limit 100 --json
 settlemesh msg read <conversation-id> <observed-sequence> --json
 settlemesh inbox --json  # authoritative unread readback; repeated read cannot move the cursor backward
 ```
+
+To send an attachment, first upload a private File asset, then pass its stable `data.id` to `msg
+send`; do not pass a one-time model-input URL. A message may contain text, up to 32 distinct
+`--file-id` values, or both. The receiver reads the server-issued `grant_id` from `msg list`, then
+downloads to an explicit new path. The CLI never prints the one-time transfer capability, never puts
+it in a URL, verifies the exact size/hash/content type, and publishes the local file only after the
+whole download succeeds; it will not overwrite an existing path:
+
+```bash
+settlemesh files upload ./plan.pdf --purpose service_input --retention 24h --json
+settlemesh msg send <conversation-id> --text "Review this" --file-id <data.id> --json
+settlemesh msg list <conversation-id> --after 0 --limit 100 --json  # read attachments[].grant_id
+settlemesh msg attachment download <conversation-id> <grant-id> --output ./plan.pdf --json
+settlemesh msg attachment revoke <conversation-id> <grant-id> --json
+```
+
+Only the sender can revoke a grant. Revocation blocks future transfer issuance; a capability already
+issued to an authorized member remains usable only for its short bounded lifetime. If an issue or
+download response is lost, do not guess or reuse a token: issue a new download from the same grant.
 
 An unknown conversation and a conversation you no longer belong to both fail closed as not found. Do
 not retry a failed read by guessing a later sequence; list again and use an observed sequence.
