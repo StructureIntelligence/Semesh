@@ -1,5 +1,5 @@
-// Front-end SPA. Talks ONLY to this app's own /api/* routes — never to SettleMesh directly, and never
-// sees the runtime key. The server forwards the signed-in user's session as X-Settle-Payer so the
+// Front-end SPA. Talks ONLY to this app's own /api/* routes — never to Semesh directly, and never
+// sees the runtime key. The server forwards the signed-in user's session as X-Semesh-Payer so the
 // logged-in user's Aev wallet is charged (end-user-pays).
 
 const $ = (s) => document.querySelector(s);
@@ -9,7 +9,7 @@ const resultPanel = $("#resultPanel");
 const resultEl = $("#result");
 const costTag = $("#costTag");
 
-const OPERATION_STORAGE_KEY = "settlemesh.ai-saas-paid-api.pending-operation.v1";
+const OPERATION_STORAGE_KEY = "semesh.ai-saas-paid-api.pending-operation.v1";
 const OPERATION_ID = /^[A-Za-z0-9._:-]{8,200}$/;
 
 function loadOperation() {
@@ -88,7 +88,7 @@ async function run() {
     if (r.status === 401) {
       state.loggedIn = false;
       $("#loginBanner").hidden = false;
-      setStatus("Please sign in with SettleMesh to run.", "err");
+      setStatus("Please sign in with Semesh to run.", "err");
       return;
     }
     if (r.status === 402) {

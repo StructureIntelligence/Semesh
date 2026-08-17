@@ -11,7 +11,7 @@ export function isValidIdempotencyKey(value) {
  * @returns {{ settlement_status: "captured" | "unknown", captured_aev: number | null }}
  */
 export function captureEvidence(headers) {
-  const raw = headers && headers.get("x-settle-charged-aev");
+  const raw = headers && headers.get("x-semesh-charged-aev");
   if (raw == null || String(raw).trim() === "") {
     return { settlement_status: "unknown", captured_aev: null };
   }

@@ -1,0 +1,30 @@
+{
+  "app": {
+    "name": "agent-webapp-demo"
+  },
+  "framework": "nextjs",
+  "stack": {
+    "auth": {
+      "methods": [
+        "semesh_oauth"
+      ],
+      "mode": "lazy",
+      "provider": "semesh",
+      "required": false,
+      "scopes": [
+        "openid",
+        "profile",
+        "email",
+        "wallet.read",
+        "wallet.spend"
+      ]
+    },
+    "database": {
+      "engine": "sqlite"
+    },
+    "runtime_api": {
+      "enabled": true
+    }
+  },
+  "target": "cloudflare"
+}

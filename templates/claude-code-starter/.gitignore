@@ -6,4 +6,4 @@ out
 .env.*.local
 *.log
 .DS_Store
-.settlemesh
+.semesh

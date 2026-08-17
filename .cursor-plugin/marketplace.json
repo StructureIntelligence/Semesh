@@ -1,13 +1,13 @@
 {
-  "name": "settlemesh",
+  "name": "semesh",
   "owner": {
     "name": "StructureIntelligence Inc.",
-    "email": "hello@settlemesh.io"
+    "email": "hello@semesh.io"
   },
   "plugins": [
     {
-      "name": "settlemesh",
-      "source": "./plugins/settlemesh-cursor",
+      "name": "semesh",
+      "source": "./plugins/semesh-cursor",
       "category": "Payments"
     }
   ]

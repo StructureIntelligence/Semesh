@@ -6,13 +6,13 @@ import {
   settleLoginPath,
   settleLogoutPath,
   type SettleUser,
-} from "@/lib/settlemesh";
+} from "@/lib/semesh";
 import {
   createPolishOperation,
   resolveStoredPolishOperation,
   POLISH_OPERATION_STORAGE_KEY,
 } from "@/lib/polish-operation.mjs";
-import { PoweredBySettleMesh } from "@/components/powered-by-settlemesh";
+import { PoweredBySemesh } from "@/components/powered-by-semesh";
 
 type Snippet = { id: number; title: string; body: string; created_at: string };
 type PolishOperation = {
@@ -118,7 +118,7 @@ export default function Home() {
   async function polish() {
     const principalId = user?.id || user?.sub || "";
     if (!user || !principalId) {
-      setNote("Sign in with a valid SettleMesh identity before polishing.");
+      setNote("Sign in with a valid Semesh identity before polishing.");
       return;
     }
     if (!polishOperation && !body.trim()) return;
@@ -193,7 +193,7 @@ export default function Home() {
         <div>
           <h1 style={{ margin: 0, fontSize: 26, letterSpacing: -0.5 }}>Snippet Vault</h1>
           <p style={{ margin: "4px 0 0", color: "#9aa3b2", fontSize: 14 }}>
-            Save snippets, polish them with one paid AI call. Shipped by an agent on SettleMesh.
+            Save snippets, polish them with one paid AI call. Shipped by an agent on Semesh.
           </p>
         </div>
         <div style={{ textAlign: "right", fontSize: 13 }}>
@@ -263,7 +263,7 @@ export default function Home() {
 
       <footer style={{ marginTop: 40, textAlign: "center" }}>
         {/* Optional badge — delete the import and this line to remove. */}
-        <PoweredBySettleMesh />
+        <PoweredBySemesh />
       </footer>
     </main>
   );

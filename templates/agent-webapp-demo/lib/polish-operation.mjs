@@ -1,6 +1,6 @@
 import { isValidIdempotencyKey } from "./settlement.mjs";
 
-export const POLISH_OPERATION_STORAGE_KEY = "settlemesh.snippet-vault.polish-operation.v1";
+export const POLISH_OPERATION_STORAGE_KEY = "semesh.snippet-vault.polish-operation.v1";
 
 export function createPolishOperation(input, principalId) {
   const id = globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"

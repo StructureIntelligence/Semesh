@@ -1,0 +1,25 @@
+{
+  "app": {
+    "name": "claude-code-starter"
+  },
+  "framework": "nextjs",
+  "stack": {
+    "auth": {
+      "methods": [
+        "semesh_oauth"
+      ],
+      "mode": "lazy",
+      "provider": "semesh",
+      "required": false,
+      "scopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    },
+    "database": {
+      "engine": "sqlite"
+    }
+  },
+  "target": "cloudflare"
+}

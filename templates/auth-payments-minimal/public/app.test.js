@@ -81,7 +81,7 @@ test("browser quote adapter binds the principal and times out only the read-only
   let signal;
   globalThis.fetch = async (_url, init) => {
     signal = init.signal;
-    assert.equal(init.headers["X-Settle-Operation-Principal"], "user-alice");
+    assert.equal(init.headers["X-Semesh-Operation-Principal"], "user-alice");
     return new Promise((_resolve, reject) => {
       init.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true });
     });
@@ -121,7 +121,7 @@ test("legacy unbound operation remains quarantined for reconciliation and is nev
     input: { prompt: "unknown owner" },
     effect_may_have_started: true,
   };
-  const legacyKey = "settlemesh.auth-payments-minimal.pending-operation.v1";
+  const legacyKey = "semesh.auth-payments-minimal.pending-operation.v1";
   const storage = memoryStorage({ [legacyKey]: JSON.stringify(legacy) });
 
   assert.deepEqual(readLegacyOperation(storage), legacy);

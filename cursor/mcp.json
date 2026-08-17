@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "settlemesh": {
+    "semesh": {
       "command": "npx",
-      "args": ["-y", "settlemesh", "mcp"],
+      "args": ["-y", "semesh", "mcp"],
       "env": {
-        "SETTLE_API_KEY": "sk-settle-..."
+        "SEMESH_API_KEY": "sk-semesh-..."
       }
     }
   }

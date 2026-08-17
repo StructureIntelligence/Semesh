@@ -17,7 +17,7 @@ automatic_publication='Passing mechanical protocol checks publish and become dis
 card_containment='Aev is the platform accounting unit. Card top-up is contained and Legal remains unverified; do not claim card funding is available.'
 
 # Core contract sentences required in agent.md + llms.txt (discover-before-auth, scoped quote auth, Legal independence).
-discover_before_auth='use anonymous `settlemesh search` / `show` and other public read-only GET surfaces first — they work without login so you can learn the catalog and contracts'
+discover_before_auth='use anonymous `semesh search` / `show` and other public read-only GET surfaces first — they work without login so you can learn the catalog and contracts'
 public_capability_quote='A public platform capability quote is anonymous and read-only: it creates no hold, charge, ledger entry, allowance read, or provider call.'
 restricted_quote_auth='Authenticate to quote an agent, worker offer, app endpoint, service unit, non-public target, or any payer-aware or call-chain request.'
 legal_independence='confirmation cannot turn an unavailable Legal state into PASS'
@@ -33,24 +33,24 @@ projections=(
   llms.txt
   llms-install.md
   commands/deploy.md
-  plugins/settlemesh/commands/deploy.md
-  rules/settlemesh.mdc
-  cursor/settlemesh.mdc
-  plugins/settlemesh-cursor/rules/settlemesh.mdc
-  skills/settlemesh/SKILL.md
-  plugins/settlemesh/SKILL.md
-  plugins/settlemesh-cursor/skills/settlemesh/SKILL.md
-  plugins/settlemesh-codex/skills/settlemesh/SKILL.md
+  plugins/semesh/commands/deploy.md
+  rules/semesh.mdc
+  cursor/semesh.mdc
+  plugins/semesh-cursor/rules/semesh.mdc
+  skills/semesh/SKILL.md
+  plugins/semesh/SKILL.md
+  plugins/semesh-cursor/skills/semesh/SKILL.md
+  plugins/semesh-codex/skills/semesh/SKILL.md
 )
 
 journey_projections=(
-  rules/settlemesh.mdc
-  cursor/settlemesh.mdc
-  plugins/settlemesh-cursor/rules/settlemesh.mdc
-  skills/settlemesh/SKILL.md
-  plugins/settlemesh/SKILL.md
-  plugins/settlemesh-cursor/skills/settlemesh/SKILL.md
-  plugins/settlemesh-codex/skills/settlemesh/SKILL.md
+  rules/semesh.mdc
+  cursor/semesh.mdc
+  plugins/semesh-cursor/rules/semesh.mdc
+  skills/semesh/SKILL.md
+  plugins/semesh/SKILL.md
+  plugins/semesh-cursor/skills/semesh/SKILL.md
+  plugins/semesh-codex/skills/semesh/SKILL.md
 )
 
 contract_projections=(
@@ -70,14 +70,14 @@ deploy_truth_projections=(
   llms.txt
   llms-install.md
   commands/deploy.md
-  plugins/settlemesh/commands/deploy.md
-  rules/settlemesh.mdc
-  cursor/settlemesh.mdc
-  plugins/settlemesh-cursor/rules/settlemesh.mdc
-  skills/settlemesh/SKILL.md
-  plugins/settlemesh/SKILL.md
-  plugins/settlemesh-cursor/skills/settlemesh/SKILL.md
-  plugins/settlemesh-codex/skills/settlemesh/SKILL.md
+  plugins/semesh/commands/deploy.md
+  rules/semesh.mdc
+  cursor/semesh.mdc
+  plugins/semesh-cursor/rules/semesh.mdc
+  skills/semesh/SKILL.md
+  plugins/semesh/SKILL.md
+  plugins/semesh-cursor/skills/semesh/SKILL.md
+  plugins/semesh-codex/skills/semesh/SKILL.md
   templates/agent-webapp-demo/README.md
   templates/claude-code-starter/README.md
   templates/claude-code-starter/CLAUDE.md
@@ -110,7 +110,7 @@ text_has_false_quote_claim() {
     -e 'quotes?\s+without\s+(login|auth)\b' \
     -e 'quotes?\s+is\s+anonymous\b' \
     -e '\b(agent|worker([[:space:]]+offer)?|app([[:space:]]+endpoint)?|service[[:space:]]+unit|non-public|payer-aware|call-chain)[[:space:]-]+quotes?\b.{0,80}\banonymous\b' \
-    -e 'quote requires login or `settle_api_key` under the current contract' \
+    -e 'quote requires login or `semesh_api_key` under the current contract' \
     -e 'quote via `post /v1/billing/quote` is authenticated but read-only'; then
     return 0
   fi
@@ -133,7 +133,7 @@ text_has_forbidden_policy() {
 
   # Login/authenticate before search/show/discover, or login then search.
   # Does NOT match "search/show/discover first, then login once before quote/invoke"
-  # or bare "run settlemesh login once" without a discovery reordering.
+  # or bare "run semesh login once" without a discovery reordering.
   if printf '%s\n' "$text" | rg -qi \
     -e '\b(log[[:space:]]*in|login|authenticate[ds]?)\b.{0,120}?\b(before|then)[[:space:]]+(search|show|discover)\b'; then
     return 0
@@ -200,7 +200,7 @@ text_has_false_deploy_claim() {
 
   if ! printf '%s\n' "$text" | rg -qi \
     -e '\b(one[[:space:]]+command|one[[:space:]]+deploy)\b.{0,140}\b(turns?|makes?|creates?)\b.{0,140}\b(live|paid)[[:space:]]+(app|product|url)\b' \
-    -e '\bsettlemesh[[:space:]]+deploy\b.{0,160}\b(ships?|provisions?|wires?|gives?|returns?)\b.{0,160}\b(live[[:space:]]+url|paid[[:space:]]+product|login|database|billing)\b' \
+    -e '\bsemesh[[:space:]]+deploy\b.{0,160}\b(ships?|provisions?|wires?|gives?|returns?)\b.{0,160}\b(live[[:space:]]+url|paid[[:space:]]+product|login|database|billing)\b' \
     -e '\bdeploy\b.{0,140}\b(to|returns?|gives?|→)[[:space:]]+(a[[:space:]]+)?live[[:space:]]+([^[:space:]]+[[:space:]]+)?url\b' \
     -e '\bdeploy[[:space:]]+and[[:space:]]+monetize\b.{0,140}\bone[[:space:]]+command\b'; then
     return 1
@@ -266,7 +266,7 @@ run_self_tests() {
   assert_rejects 'agent quote is anonymous' \
     'An agent quote is anonymous.'
   assert_rejects 'stale all-auth quote claim' \
-    'Quote requires login or `SETTLE_API_KEY` under the current contract (`POST /v1/billing/quote` is authenticated — not anonymous)'
+    'Quote requires login or `SEMESH_API_KEY` under the current contract (`POST /v1/billing/quote` is authenticated — not anonymous)'
   assert_rejects 'login before search' \
     'Always login before search.'
   assert_rejects 'authenticate before show' \
@@ -274,7 +274,7 @@ run_self_tests() {
   assert_rejects 'login before discover' \
     'Login before discover, then inspect contracts.'
   assert_rejects 'login then search' \
-    'run settlemesh login then search the catalog'
+    'run semesh login then search the catalog'
   assert_rejects 'login once then search' \
     'login once (a human approves in the browser), then search'
   assert_rejects 'first call free' \
@@ -306,7 +306,7 @@ run_self_tests() {
 
   # Nearby contradiction: correct discover guidance next to a bad quote claim.
   assert_rejects 'nearby good+bad quote contradiction' \
-    'Discover with anonymous settlemesh search / show first. Also, quote works anonymously.'
+    'Discover with anonymous semesh search / show first. Also, quote works anonymously.'
   assert_rejects 'scoped public quote plus broad contradiction' \
     "$public_capability_quote All quotes are anonymous."
   assert_rejects 'anonymous quote followed by nearby denial' \
@@ -324,9 +324,9 @@ run_self_tests() {
   assert_allows 'discover then login once before quote' \
     'discover/search/show first, then login once before authenticated quote/invoke'
   assert_allows 'search show first then login once' \
-    'use anonymous settlemesh search / show first — they work without login so you can learn the catalog. Run settlemesh login once when the contract needs auth for quote or invoke.'
+    'use anonymous semesh search / show first — they work without login so you can learn the catalog. Run semesh login once when the contract needs auth for quote or invoke.'
   assert_allows 'login once bare (no reordering)' \
-    'A human approves in the browser; run settlemesh login once; the CLI reuses the stored session.'
+    'A human approves in the browser; run semesh login once; the CLI reuses the stored session.'
   assert_allows 'login once before authenticated quote only' \
     'After discovery, login once before authenticated quote or paid invoke.'
   assert_allows 'do not claim card funding' \
@@ -336,7 +336,7 @@ run_self_tests() {
   assert_allows 'no first-call promotion assumption' \
     'Do not assume a first-call promotion from cached documentation.'
   assert_allows 'anonymous search show only' \
-    'use anonymous settlemesh search / show and other public read-only GET surfaces first — they work without login'
+    'use anonymous semesh search / show and other public read-only GET surfaces first — they work without login'
 
   if ! text_has_false_cleanup_claim 'Delete queues provider cleanup and every deployment remains teardown_pending until cleanup is confirmed.'; then
     printf 'self-test FAIL (expected reject): false durable cleanup projection\n' >&2
@@ -355,23 +355,23 @@ run_self_tests() {
     printf 'self-test FAIL (expected reject): unqualified one-command deploy promise\n' >&2
     st_failed=1
   fi
-  if ! text_has_false_deploy_claim '`settlemesh deploy` ships the app and returns a live URL.'; then
+  if ! text_has_false_deploy_claim '`semesh deploy` ships the app and returns a live URL.'; then
     printf 'self-test FAIL (expected reject): unqualified live URL promise\n' >&2
     st_failed=1
   fi
-  if ! text_has_false_deploy_claim '`settlemesh deploy` returns a live URL. Current deployment authorization is unavailable.'; then
+  if ! text_has_false_deploy_claim '`semesh deploy` returns a live URL. Current deployment authorization is unavailable.'; then
     printf 'self-test FAIL (expected reject): later denial must not repair earlier promise\n' >&2
     st_failed=1
   fi
-  if text_has_false_deploy_claim 'When deployment authorization is available, the intended `settlemesh deploy` command returns a server-issued live URL after a successful serving readback.'; then
+  if text_has_false_deploy_claim 'When deployment authorization is available, the intended `semesh deploy` command returns a server-issued live URL after a successful serving readback.'; then
     printf 'self-test FAIL (expected allow): conditional target deploy contract\n' >&2
     st_failed=1
   fi
-  if text_has_false_deploy_claim '`settlemesh deploy` does not return a live URL while authorization is unavailable.'; then
+  if text_has_false_deploy_claim '`semesh deploy` does not return a live URL while authorization is unavailable.'; then
     printf 'self-test FAIL (expected allow): explicit unavailable denial\n' >&2
     st_failed=1
   fi
-  if text_has_false_deploy_claim 'For an existing app, `settlemesh deploy url` returns a URL readback; this is observation and not evidence that a new release can start.'; then
+  if text_has_false_deploy_claim 'For an existing app, `semesh deploy url` returns a URL readback; this is observation and not evidence that a new release can start.'; then
     printf 'self-test FAIL (expected allow): existing-resource observation\n' >&2
     st_failed=1
   fi
@@ -395,10 +395,10 @@ for file in "${projections[@]}"; do
 done
 
 for file in "${journey_projections[@]}"; do
-  require_text "$file" 'settlemesh search "<task>" --json'
-  require_text "$file" 'settlemesh show <service-or-operation-id> --json'
-  require_text "$file" 'settlemesh quote <entrypoint-id> --input '\''{...}'\'' --json'
-  require_text "$file" 'settlemesh call <entrypoint-id> --input '\''{...}'\'' --json'
+  require_text "$file" 'semesh search "<task>" --json'
+  require_text "$file" 'semesh show <service-or-operation-id> --json'
+  require_text "$file" 'semesh quote <entrypoint-id> --input '\''{...}'\'' --json'
+  require_text "$file" 'semesh call <entrypoint-id> --input '\''{...}'\'' --json'
 done
 
 for file in "${contract_projections[@]}"; do
@@ -436,7 +436,7 @@ for forbidden in \
   'costly, side-effecting, or destructive calls' \
   'wait for human approval by default' \
   'enters a human approval queue by default' \
-  'settlemesh tool call <tool-id>'; do
+  'semesh tool call <tool-id>'; do
   if rg -n -F -- "$forbidden" "${projections[@]}" 2>/dev/null; then
     printf 'deprecated confirmation wording remains: %s\n' "$forbidden" >&2
     failed=1
@@ -490,12 +490,12 @@ if rg -n -i -- 'card[[:space:]]+funding[[:space:]]+is[[:space:]]+available' "${p
 fi
 
 for pair in \
-  'rules/settlemesh.mdc:cursor/settlemesh.mdc' \
-  'rules/settlemesh.mdc:plugins/settlemesh-cursor/rules/settlemesh.mdc' \
-  'skills/settlemesh/SKILL.md:plugins/settlemesh/SKILL.md' \
-  'skills/settlemesh/SKILL.md:plugins/settlemesh-cursor/skills/settlemesh/SKILL.md' \
-  'skills/settlemesh/SKILL.md:plugins/settlemesh-codex/skills/settlemesh/SKILL.md' \
-  'commands/deploy.md:plugins/settlemesh/commands/deploy.md'; do
+  'rules/semesh.mdc:cursor/semesh.mdc' \
+  'rules/semesh.mdc:plugins/semesh-cursor/rules/semesh.mdc' \
+  'skills/semesh/SKILL.md:plugins/semesh/SKILL.md' \
+  'skills/semesh/SKILL.md:plugins/semesh-cursor/skills/semesh/SKILL.md' \
+  'skills/semesh/SKILL.md:plugins/semesh-codex/skills/semesh/SKILL.md' \
+  'commands/deploy.md:plugins/semesh/commands/deploy.md'; do
   left="${pair%%:*}"
   right="${pair#*:}"
   if ! cmp -s "$left" "$right"; then
@@ -504,22 +504,22 @@ for pair in \
   fi
 done
 
-require_text agent.md 'settlemesh apps delete <app-id> --confirm'
+require_text agent.md 'semesh apps delete <app-id> --confirm'
 require_text agent.md '428 confirmation_required'
 require_text agent.md 'agent must STOP here — never auto-pay'
-require_text agent.md 'settlemesh msg send <conversation-id> --text "Please review the release." --json'
+require_text agent.md 'semesh msg send <conversation-id> --text "Please review the release." --json'
 require_text agent.md "$cleanup_response_truth"
 require_text agent.md "$cleanup_durability_truth"
 require_text agent.md "$cleanup_recovery_truth"
 require_text agent.md "$cleanup_current_fail_closed_truth"
 for required_deploy_truth in \
-  'settlemesh deploy preflight . --full-stack --json' \
+  'semesh deploy preflight . --full-stack --json' \
   'admission.can_start_now' \
   "$deployment_authorization_unavailable" \
-  'settlemesh deploy status <app-id> --json' \
-  'settlemesh deploy logs <build-id> --json' \
-  'settlemesh deploy url <app-id> --json' \
-  'settlemesh apps delete <app-id> --confirm' \
+  'semesh deploy status <app-id> --json' \
+  'semesh deploy logs <build-id> --json' \
+  'semesh deploy url <app-id> --json' \
+  'semesh apps delete <app-id> --confirm' \
   'no default human approval queue'; do
   require_text agent.md "$required_deploy_truth"
 done

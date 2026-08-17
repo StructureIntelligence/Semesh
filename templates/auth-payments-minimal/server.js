@@ -1,13 +1,13 @@
-// auth-payments-minimal — the "hello world" of paid apps on SettleMesh.
+// auth-payments-minimal — the "hello world" of paid apps on Semesh.
 //
 // THE WHOLE POINT (the G2 end-user-pays loop):
-//   The user signs in with their SettleMesh account at the platform auth gate (/__settle/login).
+//   The user signs in with their Semesh account at the platform auth gate (/__semesh/login).
 //   This server then bills THAT logged-in user — not you, the developer — for one paid action, by:
-//     1. authenticating to SettleMesh with the app's injected runtime key (SETTLEMESH_APP_API_KEY), and
-//     2. forwarding the user's session token as the `X-Settle-Payer` header on the billable call.
-//   `X-Settle-Payer` is what charges the LOGGED-IN USER's Aev wallet instead of yours. We ALWAYS send
+//     1. authenticating to Semesh with the app's injected runtime key (SEMESH_APP_API_KEY), and
+//     2. forwarding the user's session token as the `X-Semesh-Payer` header on the billable call.
+//   `X-Semesh-Payer` is what charges the LOGGED-IN USER's Aev wallet instead of yours. We ALWAYS send
 //   it on user-triggered billable calls. If it's absent, the route returns 401 and the UI shows a
-//   "Sign in with SettleMesh" button — we never silently bill the developer for a user action.
+//   "Sign in with Semesh" button — we never silently bill the developer for a user action.
 //
 //   THE RUNTIME KEY NEVER REACHES THE BROWSER. It stays server-side; the browser only talks to /api/*.
 //
@@ -15,9 +15,9 @@
 //   There is no static/assumed price fallback. A quote transport/backend/provider/availability/contract
 //   failure is projected as a machine-readable error and prevents invoke.
 //
-//   PRINCIPAL BINDING: the browser binds each recovery record to /__settle/me user.sub (or id when
+//   PRINCIPAL BINDING: the browser binds each recovery record to /__semesh/me user.sub (or id when
 //   sub is absent). Before quote or invoke, this server compares that non-secret binding with the
-//   trusted x-settle-user-id injected by the SettleMesh edge. Missing/mismatched identity fails
+//   trusted x-semesh-user-id injected by the Semesh edge. Missing/mismatched identity fails
 //   pre-effect. Never expose these routes on a path that bypasses that edge.
 
 const http = require("http");
@@ -25,19 +25,19 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = process.env.PORT || 8080;
-const BASE = (process.env.SETTLEMESH_BASE_URL || process.env.SETTLE_BASE_URL || "https://api.settlemesh.io").replace(/\/+$/, "");
+const BASE = (process.env.SEMESH_BASE_URL || "https://api.semesh.net").replace(/\/+$/, "");
 // Injected by the platform at deploy time. Locally, export it yourself (see README).
-const RUNTIME_KEY = process.env.SETTLEMESH_APP_API_KEY || process.env.SETTLE_API_KEY || "";
+const RUNTIME_KEY = process.env.SEMESH_APP_API_KEY || process.env.SEMESH_API_KEY || "";
 
 // -------------------------------------------------------------------------------------------------
 // CONFIGURE YOUR PAID ACTION HERE.
 //
-// A "capability" is a metered SettleMesh action invoked at POST /v1/capabilities/{id}/invoke.
+// A "capability" is a metered Semesh action invoked at POST /v1/capabilities/{id}/invoke.
 // Pick the capability your app charges for, set its ID below, and shape `input` to match it.
 //
 // TODO(you): set CAPABILITY_ID to the capability you want to bill for, and confirm the exact
 //            `input` body for it. The capability catalogue + per-capability request shapes are in
-//            the agent guide at https://www.settlemesh.io/agent.md — do NOT guess the ID or body.
+//            the agent guide at https://semesh.io/agent.md — do NOT guess the ID or body.
 //            (Example real capability used by other templates: "image.gpt-image-2".)
 const CAPABILITY_ID = "REPLACE_WITH_A_REAL_CAPABILITY_ID"; // e.g. "image.gpt-image-2"
 
@@ -47,7 +47,7 @@ const SAFE_MACHINE_CODE = /^[a-z][a-z0-9_]{0,127}$/;
 // Treat the principal as an opaque OIDC subject. Visible ASCII is header-safe without baking in a
 // UUID/email/provider format; the strict bound prevents unbounded storage/header amplification.
 const PRINCIPAL_ID = /^[\x21-\x7E]{1,200}$/;
-const configuredQuoteTimeout = Number(process.env.SETTLEMESH_QUOTE_TIMEOUT_MS);
+const configuredQuoteTimeout = Number(process.env.SEMESH_QUOTE_TIMEOUT_MS);
 const DEFAULT_QUOTE_TIMEOUT_MS = Number.isFinite(configuredQuoteTimeout) && configuredQuoteTimeout >= 100 && configuredQuoteTimeout <= 60000
   ? configuredQuoteTimeout
   : 15000;
@@ -62,8 +62,8 @@ const QUOTE_AMOUNT_FIELDS = [
 ];
 
 // -------------------------------------------------------------------------------------------------
-// Payer extraction: the logged-in user's token. Bearer header, else the durable __settle_session
-// cookie (7-day), else the short-lived __settle_access cookie. "" when nobody is logged in.
+// Payer extraction: the logged-in user's token. Bearer header, else the durable __semesh_session
+// cookie (7-day), else the short-lived __semesh_access cookie. "" when nobody is logged in.
 // -------------------------------------------------------------------------------------------------
 function parseCookies(header) {
   const out = {};
@@ -77,15 +77,15 @@ function payerToken(req) {
   const auth = String(req.headers["authorization"] || "");
   if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
   const c = parseCookies(req.headers["cookie"]);
-  return c["__settle_session"] || c["__settle_access"] || "";
+  return c["__semesh_session"] || c["__semesh_access"] || "";
 }
 
 // -------------------------------------------------------------------------------------------------
-// SettleMesh call helper. RUNTIME_KEY authenticates the app; X-Settle-Payer bills the logged-in user.
+// Semesh call helper. RUNTIME_KEY authenticates the app; X-Semesh-Payer bills the logged-in user.
 // -------------------------------------------------------------------------------------------------
-async function settleFetch(method, p, payer, body, idempotencyKey, options = {}) {
+async function semeshFetch(method, p, payer, body, idempotencyKey, options = {}) {
   const headers = { Authorization: "Bearer " + RUNTIME_KEY };
-  if (payer) headers["X-Settle-Payer"] = payer; // <-- this header makes the USER pay
+  if (payer) headers["X-Semesh-Payer"] = payer; // <-- this header makes the USER pay
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   if (body) headers["Content-Type"] = "application/json";
   const init = { method, headers, body: body ? JSON.stringify(body) : undefined };
@@ -99,7 +99,7 @@ async function settleFetch(method, p, payer, body, idempotencyKey, options = {})
 
 // Invoke a metered capability: POST /v1/capabilities/{id}/invoke with {input}.
 function invokeCapability(capabilityId, input, payer, idempotencyKey) {
-  return settleFetch("POST", `/v1/capabilities/${encodeURIComponent(capabilityId)}/invoke`, payer, { input: input || {} }, idempotencyKey);
+  return semeshFetch("POST", `/v1/capabilities/${encodeURIComponent(capabilityId)}/invoke`, payer, { input: input || {} }, idempotencyKey);
 }
 
 // Unwrap a possibly-{success,data,meta}-wrapped response down to its payload object.
@@ -108,10 +108,10 @@ function unwrap(json) {
   return json || {};
 }
 
-// Only the explicit SettleMesh post-capture header is authoritative here. Provider output may contain
+// Only the explicit Semesh post-capture header is authoritative here. Provider output may contain
 // arbitrary cost/amount-like business fields and is never billing evidence.
 function captureEvidence(headers) {
-  const raw = headers && headers.get("x-settle-charged-aev");
+  const raw = headers && headers.get("x-semesh-charged-aev");
   if (raw == null || String(raw).trim() === "") return { settlement_status: "unknown", captured_aev: null };
   const amount = Number(raw);
   if (!Number.isFinite(amount) || amount < 0) return { settlement_status: "unknown", captured_aev: null };
@@ -125,16 +125,16 @@ function validPrincipal(value) {
 }
 
 function operationPrincipal(req) {
-  const trusted = String(req.headers["x-settle-user-id"] || "");
-  const bound = String(req.headers["x-settle-operation-principal"] || "");
+  const trusted = String(req.headers["x-semesh-user-id"] || "");
+  const bound = String(req.headers["x-semesh-operation-principal"] || "");
   if (!validPrincipal(trusted)) {
     return {
       ok: false,
       status: 503,
       error: {
         code: "operation_principal_unavailable",
-        message: "The trusted SettleMesh user identity is unavailable.",
-        fix: "Use the SettleMesh auth edge and retry after it injects x-settle-user-id.",
+        message: "The trusted Semesh user identity is unavailable.",
+        fix: "Use the Semesh auth edge and retry after it injects x-semesh-user-id.",
         retryable: true,
       },
     };
@@ -146,7 +146,7 @@ function operationPrincipal(req) {
       error: {
         code: "operation_principal_binding_required",
         message: "The operation is missing a valid stable principal binding.",
-        fix: "Resolve /__settle/me and bind its user.sub, or user.id only when sub is absent, before quoting or invoking.",
+        fix: "Resolve /__semesh/me and bind its user.sub, or user.id only when sub is absent, before quoting or invoking.",
         retryable: false,
       },
     };
@@ -208,7 +208,7 @@ function projectQuoteError({ status, json, headers, cause } = {}) {
     if (cause) {
       code = code || "quote_transport_failed";
       message = message || "The read-only price quote could not be reached.";
-      fix = fix || "Check network connectivity to SettleMesh and retry the quote before invoking.";
+      fix = fix || "Check network connectivity to Semesh and retry the quote before invoking.";
       retryable = retryable == null ? true : retryable;
     } else if (status != null && status >= 500) {
       code = code || "quote_backend_unavailable";
@@ -233,7 +233,7 @@ function projectQuoteError({ status, json, headers, cause } = {}) {
     fix = "Do not assume a price. Obtain a successful live POST /v1/billing/quote before invoking.";
   }
 
-  const headerTrace = headers && typeof headers.get === "function" ? headers.get("x-settle-trace-id") : "";
+  const headerTrace = headers && typeof headers.get === "function" ? headers.get("x-semesh-trace-id") : "";
   const trace_id = safeTraceId(headerTrace) || safeTraceId(err.trace_id);
   const out = { code, message, fix, retryable: !!retryable };
   if (trace_id) out.trace_id = trace_id;
@@ -375,7 +375,7 @@ async function quoteAction(payer, input, options = {}) {
     controller.abort();
   }, timeoutMs);
   try {
-    const r = await settleFetch("POST", "/v1/billing/quote", payer, {
+    const r = await semeshFetch("POST", "/v1/billing/quote", payer, {
       capability_id: CAPABILITY_ID,
       input,
     }, undefined, { signal: controller.signal });
@@ -498,11 +498,11 @@ const server = http.createServer(async (req, res) => {
         {
           code: "login_required",
           message: "Sign in before quoting this paid action.",
-          fix: "Open /__settle/login, then retry the read-only quote.",
+          fix: "Open /__semesh/login, then retry the read-only quote.",
           retryable: false,
         },
         "auth",
-        { login: "/__settle/login" }
+        { login: "/__semesh/login" }
       );
     }
     const principal = operationPrincipal(req);
@@ -513,7 +513,7 @@ const server = http.createServer(async (req, res) => {
         500,
         {
           code: "app_not_configured",
-          message: "SETTLEMESH_APP_API_KEY is missing.",
+          message: "SEMESH_APP_API_KEY is missing.",
           fix: "Configure the server-side runtime key, then retry the read-only quote.",
           retryable: false,
         },
@@ -529,7 +529,7 @@ const server = http.createServer(async (req, res) => {
     return sendJSON(res, 200, { ok: true, quote: quoted.quote });
   }
 
-  // THE PAID ACTION. Billable -> bills the logged-in user (X-Settle-Payer = their session).
+  // THE PAID ACTION. Billable -> bills the logged-in user (X-Semesh-Payer = their session).
   // Quote the exact same input first; never invoke when the live quote fails.
   if (u.pathname === "/api/action" && req.method === "POST") {
     const payer = payerToken(req);
@@ -540,11 +540,11 @@ const server = http.createServer(async (req, res) => {
         {
           code: "login_required",
           message: "Sign in before running this paid action.",
-          fix: "Open /__settle/login, then retry the same action intent.",
+          fix: "Open /__semesh/login, then retry the same action intent.",
           retryable: false,
         },
         "auth",
-        { login: "/__settle/login" }
+        { login: "/__semesh/login" }
       );
     }
     const principal = operationPrincipal(req);
@@ -555,7 +555,7 @@ const server = http.createServer(async (req, res) => {
         500,
         {
           code: "app_not_configured",
-          message: "SETTLEMESH_APP_API_KEY is missing.",
+          message: "SEMESH_APP_API_KEY is missing.",
           fix: "Configure the server-side runtime key, then request a new live quote.",
           retryable: false,
         },
@@ -580,7 +580,7 @@ const server = http.createServer(async (req, res) => {
       );
     }
 
-    // TODO(you): shape `input` to match your chosen CAPABILITY_ID (see https://www.settlemesh.io/agent.md).
+    // TODO(you): shape `input` to match your chosen CAPABILITY_ID (see https://semesh.io/agent.md).
     const quoted = await quoteAction(payer, input);
     if (!quoted.ok) {
       return sendPreEffectProblem(res, quoted.status || 503, quoted.error, "quote", {

@@ -1,11 +1,11 @@
-// ai-saas-paid-api — a pay-per-use AI app on SettleMesh (end-user-pays / "G2").
+// ai-saas-paid-api — a pay-per-use AI app on Semesh (end-user-pays / "G2").
 //
 // THE WHOLE POINT (read this first):
 //   A signed-in end user triggers an AI call, and *that user* — not you, the developer — is billed for
 //   it against their own Aev balance. We never write any billing code. The platform does the charge.
 //   The only two things this server does to make that happen:
-//     1. Authenticate to SettleMesh with the app's injected runtime key (SETTLEMESH_APP_API_KEY).
-//     2. Forward the logged-in user's session as the `X-Settle-Payer` header on each billable call.
+//     1. Authenticate to Semesh with the app's injected runtime key (SEMESH_APP_API_KEY).
+//     2. Forward the logged-in user's session as the `X-Semesh-Payer` header on each billable call.
 //   That header is what charges the END USER's Aev wallet instead of yours. We ALWAYS forward it on
 //   user-triggered billable calls. If it's missing, we return 401 and the UI shows a Sign-in button —
 //   we never silently bill the developer for a user action.
@@ -13,7 +13,7 @@
 //   No secret ever reaches the browser. The runtime key stays server-side; the browser talks only to
 //   this server's /api/* routes.
 //
-//   Aev is SettleMesh prepaid credit: 1 USD = 100 Aev. Card funding is offered only when the live
+//   Aev is Semesh prepaid credit: 1 USD = 100 Aev. Card funding is offered only when the live
 //   server response says its Legal/provider gates are available; this template never assumes that.
 
 const http = require("http");
@@ -21,30 +21,30 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = process.env.PORT || 8080;
-const BASE = (process.env.SETTLEMESH_BASE_URL || process.env.SETTLE_BASE_URL || "https://api.settlemesh.io").replace(/\/+$/, "");
-// Injected automatically by `settlemesh deploy`. Authenticates this app to SettleMesh.
-const RUNTIME_KEY = process.env.SETTLEMESH_APP_API_KEY || process.env.SETTLE_API_KEY || "";
+const BASE = (process.env.SEMESH_BASE_URL || "https://api.semesh.net").replace(/\/+$/, "");
+// Injected automatically by `semesh deploy`. Authenticates this app to Semesh.
+const RUNTIME_KEY = process.env.SEMESH_APP_API_KEY || process.env.SEMESH_API_KEY || "";
 
 // ---------------------------------------------------------------------------------------------------
 // The AI capability this app charges for.
 //
-// TODO(confirm against https://www.settlemesh.io/agent.md): verify the capability id and the exact `input`
+// TODO(confirm against https://semesh.io/agent.md): verify the capability id and the exact `input`
 // body before going live. The INVOKE MECHANICS below are correct (POST /v1/capabilities/{id}/invoke
-// with a JSON `{ input: {...} }` body, Bearer runtime key, X-Settle-Payer = end-user session). What you
+// with a JSON `{ input: {...} }` body, Bearer runtime key, X-Semesh-Payer = end-user session). What you
 // must confirm is (a) the capability id string and (b) the field names inside `input` for that model.
 // `llm.chat` and a `{ messages: [...] }` input are the common shape, but DO NOT guess — check agent.md.
-const CAPABILITY_ID = process.env.SETTLEMESH_CAPABILITY_ID || "llm.chat";
+const CAPABILITY_ID = process.env.SEMESH_CAPABILITY_ID || "llm.chat";
 const MAX_PROMPT_CHARS = 2000;
 
 // A display-only price floor (Aev) so the UI can show "you pay per use" before the call returns.
 // This is only a pre-call estimate. Final capture is displayed only from the platform's explicit
-// x-settle-charged-aev post-capture response header, never from the provider response body.
+// x-semesh-charged-aev post-capture response header, never from the provider response body.
 const PRICE_ESTIMATE_AEV = Number(process.env.PRICE_ESTIMATE_AEV || 2);
 
 // ---------------------------------------------------------------------------------------------------
 // Payer extraction: the logged-in user's delegated-payer token. Bearer header, else the durable
-// __settle_session cookie (7-day, set by the platform auth gate at login), else the short-lived
-// __settle_access cookie. "" when nobody is signed in.
+// __semesh_session cookie (7-day, set by the platform auth gate at login), else the short-lived
+// __semesh_access cookie. "" when nobody is signed in.
 // ---------------------------------------------------------------------------------------------------
 function parseCookies(header) {
   const out = {};
@@ -58,15 +58,15 @@ function payerToken(req) {
   const auth = String(req.headers["authorization"] || "");
   if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
   const c = parseCookies(req.headers["cookie"]);
-  return c["__settle_session"] || c["__settle_access"] || "";
+  return c["__semesh_session"] || c["__semesh_access"] || "";
 }
 
 // ---------------------------------------------------------------------------------------------------
-// SettleMesh call helper. RUNTIME_KEY authenticates the app; X-Settle-Payer bills the logged-in user.
+// Semesh call helper. RUNTIME_KEY authenticates the app; X-Semesh-Payer bills the logged-in user.
 // ---------------------------------------------------------------------------------------------------
-async function settleFetch(method, p, payer, body, idempotencyKey) {
+async function semeshFetch(method, p, payer, body, idempotencyKey) {
   const headers = { Authorization: "Bearer " + RUNTIME_KEY };
-  if (payer) headers["X-Settle-Payer"] = payer; // <- this is what makes the END USER pay.
+  if (payer) headers["X-Semesh-Payer"] = payer; // <- this is what makes the END USER pay.
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   if (body) headers["Content-Type"] = "application/json";
   const res = await fetch(BASE + p, { method, headers, body: body ? JSON.stringify(body) : undefined });
@@ -78,7 +78,7 @@ async function settleFetch(method, p, payer, body, idempotencyKey) {
 
 // Invoke a capability for the paying user.
 function invokeCapability(capabilityId, input, payer, idempotencyKey) {
-  return settleFetch("POST", `/v1/capabilities/${encodeURIComponent(capabilityId)}/invoke`, payer, { input: input || {} }, idempotencyKey);
+  return semeshFetch("POST", `/v1/capabilities/${encodeURIComponent(capabilityId)}/invoke`, payer, { input: input || {} }, idempotencyKey);
 }
 
 // Defensively unwrap a possibly-{success,data,meta}-wrapped response down to its payload.
@@ -112,7 +112,7 @@ function extractText(json) {
 // Only the platform's explicit post-capture response header is settlement authority here. Capability
 // output is untrusted provider data and must never be searched for cost-like fields.
 function captureEvidence(headers) {
-  const raw = headers && headers.get("x-settle-charged-aev");
+  const raw = headers && headers.get("x-semesh-charged-aev");
   if (raw == null || String(raw).trim() === "") return { settlement_status: "unknown", captured_aev: null };
   const amount = Number(raw);
   if (!Number.isFinite(amount) || amount < 0) return { settlement_status: "unknown", captured_aev: null };
@@ -159,12 +159,12 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
-  // Run the AI call. BILLABLE -> charges the logged-in user (X-Settle-Payer = their session).
+  // Run the AI call. BILLABLE -> charges the logged-in user (X-Semesh-Payer = their session).
   if (u.pathname === "/api/run" && req.method === "POST") {
     const payer = payerToken(req);
     // Never bill the developer for a user action: no signed-in user => 401, UI shows "Sign in".
-    if (!payer) return sendJSON(res, 401, { error: "login_required", login: "/__settle/login" });
-    if (!RUNTIME_KEY) return sendJSON(res, 500, { error: "app_not_configured", message: "SETTLEMESH_APP_API_KEY is missing" });
+    if (!payer) return sendJSON(res, 401, { error: "login_required", login: "/__semesh/login" });
+    if (!RUNTIME_KEY) return sendJSON(res, 500, { error: "app_not_configured", message: "SEMESH_APP_API_KEY is missing" });
 
     let raw = "";
     for await (const c of req) raw += c;

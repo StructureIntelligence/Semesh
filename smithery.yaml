@@ -1,5 +1,5 @@
-# Smithery local stdio server config for the SettleMesh MCP server.
-# Distributed via npm (`npx -y settlemesh mcp`). No Docker/hosted runtime.
+# Smithery local stdio server config for the Semesh MCP server.
+# Distributed via npm (`npx -y semesh mcp`). No Docker/hosted runtime.
 # NOTE: validate against the current Smithery schema (https://smithery.ai/docs) before submitting —
 # Smithery's config format evolves. Smithery also auto-ingests servers from the official MCP
 # registry, so this file is a faster explicit path, not the only one.
@@ -8,14 +8,14 @@ startCommand:
   configSchema:
     type: object
     properties:
-      settleApiKey:
+      semeshApiKey:
         type: string
-        title: SETTLE_API_KEY
-        description: "Your SettleMesh API key (sk-settle-...). Optional if you have run `settlemesh login` and a CLI session is stored."
+        title: SEMESH_API_KEY
+        description: "Your Semesh API key (sk-semesh-...). Optional if you have run `semesh login` and a CLI session is stored."
     required: []
   commandFunction: |-
     (config) => ({
       command: 'npx',
-      args: ['-y', 'settlemesh', 'mcp'],
-      env: config.settleApiKey ? { SETTLE_API_KEY: config.settleApiKey } : {}
+      args: ['-y', 'semesh', 'mcp'],
+      env: config.semeshApiKey ? { SEMESH_API_KEY: config.semeshApiKey } : {}
     })

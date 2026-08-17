@@ -1,11 +1,11 @@
-SettleMesh — © StructureIntelligence Inc. All rights reserved.
+Semesh — © StructureIntelligence Inc. All rights reserved.
 
 The source files in this repository (MCP server configuration, the Claude Code
 plugin, Cursor rules, documentation, and the agent guide) are licensed under the
 Apache License 2.0 (see LICENSE), except the templates/ directory, which is
 licensed under the MIT License.
 
-The SettleMesh CLI binaries distributed via the npm package "settlemesh" are NOT
+The Semesh CLI binaries distributed via the npm package "semesh" are NOT
 covered by the Apache License. They are proprietary software © StructureIntelligence
-Inc., provided under the SettleMesh CLI End User License Agreement. The SettleMesh
+Inc., provided under the Semesh CLI End User License Agreement. The Semesh
 platform and backend are proprietary and are not included in this repository.

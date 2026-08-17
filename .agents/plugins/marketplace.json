@@ -1,14 +1,14 @@
 {
-  "name": "settlemesh",
+  "name": "semesh",
   "interface": {
-    "displayName": "SettleMesh"
+    "displayName": "Semesh"
   },
   "plugins": [
     {
-      "name": "settlemesh",
+      "name": "semesh",
       "source": {
         "source": "local",
-        "path": "./plugins/settlemesh-codex"
+        "path": "./plugins/semesh-codex"
       },
       "policy": {
         "installation": "AVAILABLE",
