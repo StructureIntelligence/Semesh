@@ -20,12 +20,12 @@ test("provider body and HTTP success cannot prove capture", () => {
 
 test("only a valid explicit platform header proves capture", () => {
   assert.deepEqual(
-    captureEvidence(new Headers({ "x-settle-charged-aev": "3" })),
+    captureEvidence(new Headers({ "x-semesh-charged-aev": "3" })),
     { settlement_status: "captured", captured_aev: 3 }
   );
   for (const value of ["", "NaN", "-1", "Infinity"]) {
     assert.deepEqual(
-      captureEvidence(new Headers({ "x-settle-charged-aev": value })),
+      captureEvidence(new Headers({ "x-semesh-charged-aev": value })),
       { settlement_status: "unknown", captured_aev: null }
     );
   }

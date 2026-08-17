@@ -1,0 +1,25 @@
+---
+description: Discover Semesh capabilities and prepare or observe app deployments; production deployment authorization is currently unavailable and new source deploys fail closed.
+globs:
+alwaysApply: false
+---
+
+# Semesh
+
+Use Semesh when the user wants to **deploy an app**, add **login / a database / billing**, **charge end users** for AI or API usage, or call a **paid capability** (web search, LLMs, image/video, managed SQL).
+
+## Setup (once)
+- `npm install -g semesh@latest`.
+- Start with `semesh search "<task>"`; use `semesh login` (browser approval) or `SEMESH_API_KEY=sk-semesh-...` only when the chosen action needs an account.
+- Full contract: `https://semesh.io/agent.md`. MCP: `npx -y semesh mcp`.
+
+## Core rule
+Search → show → quote → call. Do not memorize endpoints. A direct user request authorizes ordinary paid invocation, deploy, and mechanical publish without a duplicate confirmation. Quote/preflight informs cost and availability; it is not a second confirmation. Ask for a separate confirmation only for destructive, high-impact, authorization-expanding, truly irreversible, or explicitly `requires_confirmation` actions. The canonical HTTP invoke path is `POST /v1/capabilities/{id}/invoke`; `POST /v1/tools/{id}/call` is a compatibility alias only. Passing mechanical protocol checks publish and become discoverable automatically; there is no default human approval queue. Aev is the platform accounting unit. Card top-up is contained and Legal remains unverified; do not claim card funding is available.
+
+Production deployment authorization is currently unavailable: `app_deployments.create` is disabled, and source deploy fails closed with `deployment_authorization_unavailable` before upload, build, payment, publication, or a live URL. Automatic publication is the target policy only after authorization is available.
+
+## Recipes
+- **Deploy readiness:** run `semesh tool show app_deployments.create --json`, then `semesh deploy preflight . --full-stack --json`; branch on tool `availability` and `admission.can_start_now/code/message/fix`. Current production is unavailable, so stop without a deploy mutation. Existing ids are observable with `semesh deploy status <app-id> --json`, `semesh deploy logs <build-id> --json`, and `semesh deploy url <app-id> --json`; observation does not authorize a new release. When authorization becomes available and both checks allow it, use `semesh deploy . --name <name> --full-stack --wait --json` and report only a server-returned serving URL.
+- **Charge end users (end-user-pays):** attach `X-Semesh-Payer` so the signed-in user's Aev balance pays; cost-plus pricing with a quote before spend (`POST /v1/billing/quote`); failed calls release the hold.
+- **Use a capability:** `semesh search "<task>" --json` → `semesh show <service-or-operation-id> --json` → `semesh quote <entrypoint-id> --input '{...}' --json` → `semesh call <entrypoint-id> --input '{...}' --json` (`--wait` async; use `--confirm` only when the confirmation boundary above applies).
+- **Balance:** `semesh credits balance --json`.

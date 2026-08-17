@@ -2,10 +2,10 @@
 // GET  /api/snippets        -> list the signed-in user's snippets
 // POST /api/snippets        -> create a snippet { title, body }
 //
-// The table is created lazily on first call. SettleMesh's managed SQLite is
-// reached server-side via lib/settlemesh.ts (dbQuery), never from the browser.
+// The table is created lazily on first call. Semesh's managed SQLite is
+// reached server-side via lib/semesh.ts (dbQuery), never from the browser.
 
-import { dbQuery, resolveSettlePrincipal } from "@/lib/settlemesh";
+import { dbQuery, resolveSettlePrincipal } from "@/lib/semesh";
 
 export const dynamic = "force-dynamic";
 

@@ -1,8 +1,8 @@
-// Tiny client. Talks ONLY to this app's /api/* — never to SettleMesh directly, never sees a key.
+// Tiny client. Talks ONLY to this app's /api/* — never to Semesh directly, never sees a key.
 const $ = (id) => document.getElementById(id);
 let spent = 0;
-const LEGACY_OPERATION_STORAGE_KEY = "settlemesh.auth-payments-minimal.pending-operation.v1";
-const OPERATION_STORAGE_PREFIX = "settlemesh.auth-payments-minimal.pending-operation.v2.";
+const LEGACY_OPERATION_STORAGE_KEY = "semesh.auth-payments-minimal.pending-operation.v1";
+const OPERATION_STORAGE_PREFIX = "semesh.auth-payments-minimal.pending-operation.v2.";
 const OPERATION_ID = /^[A-Za-z0-9._:-]{8,200}$/;
 // Opaque OIDC subjects are provider-defined. Accept bounded visible ASCII that is safe in an HTTP
 // header; do not encode assumptions about UUIDs, emails, or one identity provider.
@@ -15,7 +15,7 @@ function validPrincipal(value) {
   return typeof value === "string" && PRINCIPAL_ID.test(value);
 }
 
-// /__settle/me is the browser identity authority. Prefer OIDC `sub`; use `id` only when
+// /__semesh/me is the browser identity authority. Prefer OIDC `sub`; use `id` only when
 // `sub` is absent. A present malformed sub fails closed instead of silently changing identity.
 function principalFromMe(payload) {
   if (!payload || payload.authenticated !== true || !payload.user || typeof payload.user !== "object") return null;
@@ -230,15 +230,15 @@ async function resolveBrowserIdentity() {
   let response;
   let payload;
   try {
-    response = await fetch("/__settle/me", { cache: "no-store" });
+    response = await fetch("/__semesh/me", { cache: "no-store" });
     payload = await response.json();
   } catch {
     return {
       ok: false,
       error: {
         code: "identity_unavailable",
-        message: "This app could not resolve the current SettleMesh identity.",
-        fix: "Check the SettleMesh auth edge, then retry. The paid action has not run.",
+        message: "This app could not resolve the current Semesh identity.",
+        fix: "Check the Semesh auth edge, then retry. The paid action has not run.",
         retryable: true,
       },
     };
@@ -251,7 +251,7 @@ async function resolveBrowserIdentity() {
       ok: false,
       error: {
         code: "identity_unavailable",
-        message: "The SettleMesh identity endpoint is unavailable.",
+        message: "The Semesh identity endpoint is unavailable.",
         fix: "Retry identity resolution before quoting or running a paid action.",
         retryable: response.status >= 500,
       },
@@ -276,7 +276,7 @@ function showLegacyRecovery(record) {
   showQuoteFailure({
     code: "legacy_operation_principal_unbound",
     message: `Stored operation ${record.id} predates account binding and cannot be replayed safely.`,
-    fix: `Reconcile idempotency key ${record.id} in SettleMesh activity. Keep this record until its settlement is confirmed terminal; it will not be invoked by this app.`,
+    fix: `Reconcile idempotency key ${record.id} in Semesh activity. Keep this record until its settlement is confirmed terminal; it will not be invoked by this app.`,
     retryable: false,
   });
   updateOperationUI();
@@ -298,7 +298,7 @@ async function fetchReadOnlyQuote(input, principal, options = {}) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Settle-Operation-Principal": principal,
+        "X-Semesh-Operation-Principal": principal,
       },
       body: JSON.stringify(input),
       signal: controller.signal,
@@ -401,7 +401,7 @@ async function run() {
     return;
   }
   if (!identity.logged_in) {
-    location.href = "/__settle/login";
+    location.href = "/__semesh/login";
     return;
   }
   if (identity.principal !== currentPrincipal) {
@@ -448,7 +448,7 @@ async function run() {
       headers: {
         "Content-Type": "application/json",
         "Idempotency-Key": currentOperation.id,
-        "X-Settle-Operation-Principal": currentPrincipal,
+        "X-Semesh-Operation-Principal": currentPrincipal,
       },
       // TODO(you): send whatever your chosen capability needs in the body.
       body: JSON.stringify(currentOperation.input),
@@ -470,7 +470,7 @@ async function run() {
         operation = null;
         storeOperation(null);
       }
-      location.href = data.login || "/__settle/login";
+      location.href = data.login || "/__semesh/login";
       return;
     }
 

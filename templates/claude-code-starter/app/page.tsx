@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PoweredBySettleMesh } from "../components/powered-by-settlemesh";
+import { PoweredBySemesh } from "../components/powered-by-semesh";
 
 type Me = { authenticated: boolean; user?: { email?: string; name?: string } };
 
@@ -10,8 +10,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // SettleMesh injects these auth endpoints at the edge for every deployed app.
-    fetch("/__settle/me", { cache: "no-store" })
+    // Semesh injects these auth endpoints at the edge for every deployed app.
+    fetch("/__semesh/me", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((j: Me | null) => setMe(j))
       .catch(() => setMe(null))
@@ -32,7 +32,7 @@ export default function Home() {
             Hi <strong>{name}</strong> — you are signed in.
           </p>
           <p>
-            <a href="/__settle/logout">Sign out</a>
+            <a href="/__semesh/logout">Sign out</a>
           </p>
         </>
       ) : (
@@ -40,12 +40,12 @@ export default function Home() {
           <p>You are not signed in yet.</p>
           <p>
             {/* Lazy auth: login is only triggered when the user clicks. */}
-            <a href="/__settle/login?return_to=/">Sign in with SettleMesh</a>
+            <a href="/__semesh/login?return_to=/">Sign in with Semesh</a>
           </p>
         </>
       )}
 
-      <PoweredBySettleMesh />
+      <PoweredBySemesh />
     </main>
   );
 }

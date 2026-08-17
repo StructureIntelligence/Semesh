@@ -1,0 +1,38 @@
+{
+  "app": {
+    "name": "paid-tool-api"
+  },
+  "start": "node server.js",
+  "stack": {
+    "auth": {
+      "methods": [
+        "semesh_oauth"
+      ],
+      "mode": "lazy",
+      "provider": "semesh",
+      "required": false,
+      "scopes": [
+        "openid",
+        "profile",
+        "email",
+        "wallet.read",
+        "wallet.spend"
+      ]
+    },
+    "runtime": {
+      "cpu": 1,
+      "memory": "512Mi"
+    },
+    "runtime_api": {
+      "enabled": true
+    },
+    "billing": {
+      "markup": 1.3
+    }
+  },
+  "env": [
+    "SEMESH_BASE_URL",
+    "SEMESH_APP_API_KEY"
+  ],
+  "target": "cloudflare"
+}

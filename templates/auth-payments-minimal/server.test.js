@@ -3,14 +3,14 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-process.env.SETTLEMESH_APP_API_KEY = "test-runtime-key";
-process.env.SETTLEMESH_BASE_URL = "https://quote-authority.test";
+process.env.SEMESH_APP_API_KEY = "test-runtime-key";
+process.env.SEMESH_BASE_URL = "https://quote-authority.test";
 
 const serverPath = path.join(__dirname, "server.js");
 const source = fs.readFileSync(serverPath, "utf8");
 const TEST_PRINCIPAL_HEADERS = {
-  "x-settle-user-id": "user-test",
-  "x-settle-operation-principal": "user-test",
+  "x-semesh-user-id": "user-test",
+  "x-semesh-operation-principal": "user-test",
 };
 
 test("source removes every static/assumed price fallback", () => {
@@ -159,7 +159,7 @@ test("projectQuoteError projects code/message/fix/retryable and safe trace_id", 
         trace_id: "trace_abc12345",
       },
     },
-    headers: new Headers({ "x-settle-trace-id": "header-trace-999" }),
+    headers: new Headers({ "x-semesh-trace-id": "header-trace-999" }),
   });
   assert.equal(err.code, "quote_hold_ceiling_unavailable");
   assert.match(err.message, /hold ceiling/i);
@@ -265,9 +265,9 @@ test("paid action fails closed before quote when trusted and bound principals ar
   };
 
   for (const [headers, expectedCode] of [
-    [{ ...baseHeaders, "x-settle-operation-principal": "user-alice" }, "operation_principal_unavailable"],
-    [{ ...baseHeaders, "x-settle-user-id": "user-alice" }, "operation_principal_binding_required"],
-    [{ ...baseHeaders, "x-settle-user-id": "user-bob", "x-settle-operation-principal": "user-alice" }, "operation_principal_mismatch"],
+    [{ ...baseHeaders, "x-semesh-operation-principal": "user-alice" }, "operation_principal_unavailable"],
+    [{ ...baseHeaders, "x-semesh-user-id": "user-alice" }, "operation_principal_binding_required"],
+    [{ ...baseHeaders, "x-semesh-user-id": "user-bob", "x-semesh-operation-principal": "user-alice" }, "operation_principal_mismatch"],
   ]) {
     const response = await nativeFetch(`http://127.0.0.1:${address.port}/api/action`, {
       method: "POST",
@@ -303,8 +303,8 @@ test("quote adapter requires the same trusted principal binding before upstream 
     headers: {
       authorization: "Bearer test-payer-session",
       "content-type": "application/json",
-      "x-settle-user-id": "user-bob",
-      "x-settle-operation-principal": "user-alice",
+      "x-semesh-user-id": "user-bob",
+      "x-semesh-operation-principal": "user-alice",
     },
     body: JSON.stringify({ prompt: "must not quote" }),
   });
@@ -334,7 +334,7 @@ describe("HTTP quote authority routes", { concurrency: 1 }, () => {
               trace_id: "trace_quote_fail_1",
             },
           },
-          { status: 401, headers: { "x-settle-trace-id": "trace_quote_fail_1" } }
+          { status: 401, headers: { "x-semesh-trace-id": "trace_quote_fail_1" } }
         );
       }
       return Response.json({ data: { ok: true } }, { status: 200 });
@@ -399,7 +399,7 @@ describe("HTTP quote authority routes", { concurrency: 1 }, () => {
           status: 200,
           headers: {
             "content-type": "application/json",
-            "x-settle-charged-aev": "3",
+            "x-semesh-charged-aev": "3",
           },
         });
       }
@@ -461,7 +461,7 @@ describe("HTTP quote authority routes", { concurrency: 1 }, () => {
       }
       return Response.json(
         { success: false, error: { code: "provider_result_failed", message: "provider result failed" } },
-        { status: 502, headers: { "x-settle-charged-aev": "4" } }
+        { status: 502, headers: { "x-semesh-charged-aev": "4" } }
       );
     };
 

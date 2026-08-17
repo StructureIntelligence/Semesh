@@ -1,6 +1,6 @@
 .env
 .env.local
 node_modules/
-.settlemesh/
+.semesh/
 *.log
 .DS_Store

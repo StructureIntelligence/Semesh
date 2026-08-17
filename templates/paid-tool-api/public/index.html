@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>paid-tool-api — a metered API on SettleMesh</title>
+<title>paid-tool-api — a metered API on Semesh</title>
 <style>
   :root { color-scheme: light dark; }
   body { font: 16px/1.6 system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
@@ -20,7 +20,7 @@
 </head>
 <body>
   <h1>paid-tool-api <span class="pill">metered</span></h1>
-  <p class="sub">One endpoint that summarizes text and requests delegated payment from the caller's SettleMesh wallet.</p>
+  <p class="sub">One endpoint that summarizes text and requests delegated payment from the caller's Semesh wallet.</p>
 
   <h2>Try it</h2>
   <p id="auth"></p>
@@ -29,16 +29,16 @@
   <pre id="out"></pre>
 
   <h2>Call it yourself</h2>
-  <p>Sign in once at <code>/__settle/login</code>, then POST to the endpoint. The session cookie selects
-     your SettleMesh wallet as payer; final capture is shown only from trusted platform evidence.</p>
-  <pre><code>curl -X POST https://YOUR-APP.run.settlemesh.io/api/tool \
-  -H "Authorization: Bearer &lt;your-settlemesh-session-token&gt;" \
+  <p>Sign in once at <code>/__semesh/login</code>, then POST to the endpoint. The session cookie selects
+     your Semesh wallet as payer; final capture is shown only from trusted platform evidence.</p>
+  <pre><code>curl -X POST https://YOUR-APP.run.semesh.io/api/tool \
+  -H "Authorization: Bearer &lt;your-semesh-session-token&gt;" \
   -H "Idempotency-Key: tool:&lt;one-stable-operation-id&gt;" \
   -H "Content-Type: application/json" \
   -d '{"text":"Long article here...","style":"bullets"}'</code></pre>
 
   <script>
-    const OPERATION_STORAGE_KEY = "settlemesh.paid-tool.pending-operation.v1";
+    const OPERATION_STORAGE_KEY = "semesh.paid-tool.pending-operation.v1";
     function newOperationId() {
       if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
         return "tool:" + globalThis.crypto.randomUUID();
@@ -70,7 +70,7 @@
     fetch("/api/me").then(r => r.json()).then(m => {
       document.getElementById("auth").innerHTML = m.logged_in
         ? "✅ You're signed in — paid calls will use your wallet; final capture is reported separately."
-        : '🔒 <a href="/__settle/login">Sign in with SettleMesh</a> to make a paid call.';
+        : '🔒 <a href="/__semesh/login">Sign in with Semesh</a> to make a paid call.';
     }).catch(() => {});
 
     document.getElementById("go").addEventListener("click", async () => {
@@ -113,7 +113,7 @@
             reflectOperation(operation);
           }
         } else if (data.login) {
-          out.innerHTML = '🔒 <a href="' + data.login + '">Sign in with SettleMesh</a> first.';
+          out.innerHTML = '🔒 <a href="' + data.login + '">Sign in with Semesh</a> first.';
         } else {
           const captured = data.settlement_status === "captured" &&
             typeof data.captured_aev === "number" && Number.isFinite(data.captured_aev) && data.captured_aev >= 0;
@@ -131,13 +131,13 @@
 
   <!--
     Optional badge — delete this <footer> block to remove it.
-    "Powered by SettleMesh" credit linking back to settlemesh.io.
+    "Powered by Semesh" credit linking back to semesh.io.
   -->
   <footer>
-    <a href="https://www.settlemesh.io/?utm_source=template&utm_medium=badge"
+    <a href="https://semesh.io/?utm_source=template&utm_medium=badge"
        target="_blank" rel="noopener noreferrer"
        style="font-size:.85rem; opacity:.55; text-decoration:none;">
-      ⚡ Powered by SettleMesh
+      ⚡ Powered by Semesh
     </a>
   </footer>
 </body>

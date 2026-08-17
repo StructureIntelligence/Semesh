@@ -1,17 +1,17 @@
-// paid-tool-api — sell ONE API endpoint, metered per call, on SettleMesh.
+// paid-tool-api — sell ONE API endpoint, metered per call, on Semesh.
 //
 // THE WHOLE POINT (pay-per-call, no billing code of your own):
-//   A caller signs in with their SettleMesh account (the platform auth gate at /__settle/login sets a
-//   durable __settle_session cookie). This server then bills THAT logged-in user — not you, the app
+//   A caller signs in with their Semesh account (the platform auth gate at /__semesh/login sets a
+//   durable __semesh_session cookie). This server then bills THAT logged-in user — not you, the app
 //   developer — for each admitted call to /api/tool, by:
-//     1. authenticating to SettleMesh with the app's injected runtime key (SETTLEMESH_APP_API_KEY), and
-//     2. forwarding the user's session token as the `X-Settle-Payer` header on the billable invoke.
-//   `X-Settle-Payer` is what charges the LOGGED-IN USER's Aev wallet instead of yours. If it is absent,
+//     1. authenticating to Semesh with the app's injected runtime key (SEMESH_APP_API_KEY), and
+//     2. forwarding the user's session token as the `X-Semesh-Payer` header on the billable invoke.
+//   `X-Semesh-Payer` is what charges the LOGGED-IN USER's Aev wallet instead of yours. If it is absent,
 //   the route returns 401 — we never silently bill the developer for a user's call. The markup you set in
-//   settlemesh.json ("billing.markup") is your margin on top of the underlying cost; the platform handles
+//   semesh.json ("billing.markup") is your margin on top of the underlying cost; the platform handles
 //   the wallet debit, the ledger, and your payout. You write zero billing code.
 //
-//   Aev = SettleMesh prepaid credit. 1 USD = 100 Aev. Wallets are topped up via Stripe.
+//   Aev = Semesh prepaid credit. 1 USD = 100 Aev. Wallets are topped up via Stripe.
 //
 //   No secret ever reaches the browser: RUNTIME_KEY stays server-side; callers only touch /api/*.
 
@@ -20,15 +20,15 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = process.env.PORT || 8080;
-const BASE = (process.env.SETTLEMESH_BASE_URL || process.env.SETTLE_BASE_URL || "https://api.settlemesh.io").replace(/\/+$/, "");
-const RUNTIME_KEY = process.env.SETTLEMESH_APP_API_KEY || process.env.SETTLE_API_KEY || "";
+const BASE = (process.env.SEMESH_BASE_URL || "https://api.semesh.net").replace(/\/+$/, "");
+const RUNTIME_KEY = process.env.SEMESH_APP_API_KEY || process.env.SEMESH_API_KEY || "";
 
 // ---------------------------------------------------------------------------------------------------
-// The capability this endpoint resells. `llm.chat` is a documented SettleMesh capability (text in/out).
+// The capability this endpoint resells. `llm.chat` is a documented Semesh capability (text in/out).
 //
 // TODO (make it yours): swap this for whatever you want to sell — another capability id, a cloud-worker
-// offer ("wof_..."), or your own logic. If you call a different SettleMesh capability/offer and are
-// unsure of the exact request body, check the agent guide at https://www.settlemesh.io/agent.md before
+// offer ("wof_..."), or your own logic. If you call a different Semesh capability/offer and are
+// unsure of the exact request body, check the agent guide at https://semesh.io/agent.md before
 // changing `invokeTool` below — do not guess the shape.
 // ---------------------------------------------------------------------------------------------------
 const CAPABILITY = process.env.TOOL_CAPABILITY_ID || "llm.chat";
@@ -38,7 +38,7 @@ const REQUEST_TIMEOUT_MS = 60 * 1000;
 
 // ---------------------------------------------------------------------------------------------------
 // Payer extraction: the logged-in user's delegated-payer token. Bearer header (for API callers), else
-// the durable __settle_session cookie (set by the auth gate at login), else short-lived __settle_access.
+// the durable __semesh_session cookie (set by the auth gate at login), else short-lived __semesh_access.
 // "" when none — and "" means "not logged in", which we refuse to bill.
 // ---------------------------------------------------------------------------------------------------
 function parseCookies(header) {
@@ -53,15 +53,15 @@ function payerToken(req) {
   const auth = String(req.headers["authorization"] || "");
   if (auth.toLowerCase().startsWith("bearer ")) return auth.slice(7).trim();
   const c = parseCookies(req.headers["cookie"]);
-  return c["__settle_session"] || c["__settle_access"] || "";
+  return c["__semesh_session"] || c["__semesh_access"] || "";
 }
 
 // ---------------------------------------------------------------------------------------------------
-// SettleMesh call helper. RUNTIME_KEY authenticates the app; X-Settle-Payer bills the logged-in user.
+// Semesh call helper. RUNTIME_KEY authenticates the app; X-Semesh-Payer bills the logged-in user.
 // ---------------------------------------------------------------------------------------------------
-async function settleFetch(method, p, payer, body, idempotencyKey) {
+async function semeshFetch(method, p, payer, body, idempotencyKey) {
   const headers = { Authorization: "Bearer " + RUNTIME_KEY };
-  if (payer) headers["X-Settle-Payer"] = payer; // <-- charges the USER's wallet, not the developer's
+  if (payer) headers["X-Semesh-Payer"] = payer; // <-- charges the USER's wallet, not the developer's
   if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   if (body) headers["Content-Type"] = "application/json";
   const ctrl = new AbortController();
@@ -84,7 +84,7 @@ async function settleFetch(method, p, payer, body, idempotencyKey) {
 
 // Invoke a capability: POST /v1/capabilities/{id}/invoke with {input}. (See agent.md for the contract.)
 function invokeTool(input, payer, idempotencyKey) {
-  return settleFetch("POST", `/v1/capabilities/${encodeURIComponent(CAPABILITY)}/invoke`, payer, { input: input || {} }, idempotencyKey);
+  return semeshFetch("POST", `/v1/capabilities/${encodeURIComponent(CAPABILITY)}/invoke`, payer, { input: input || {} }, idempotencyKey);
 }
 
 // Defensively unwrap a possibly-{success,data,meta}-wrapped response down to its payload.
@@ -97,7 +97,7 @@ function unwrap(json) {
 // captured only when the platform emits its explicit post-capture response header. Missing or invalid
 // evidence stays unknown; useful provider output never upgrades billing state by itself.
 function captureEvidence(headers) {
-  const raw = headers && headers.get("x-settle-charged-aev");
+  const raw = headers && headers.get("x-semesh-charged-aev");
   if (raw == null || String(raw).trim() === "") {
     return { settlement_status: "unknown", captured_aev: null };
   }
@@ -156,8 +156,8 @@ const server = http.createServer(async (req, res) => {
   // -------------------------------------------------------------------------------------------------
   if (u.pathname === "/api/tool" && req.method === "POST") {
     const payer = payerToken(req);
-    if (!payer) return sendJSON(res, 401, { error: "login_required", login: "/__settle/login", message: "Sign in with SettleMesh to call this paid endpoint." });
-    if (!RUNTIME_KEY) return sendJSON(res, 500, { error: "app_not_configured", message: "SETTLEMESH_APP_API_KEY is missing." });
+    if (!payer) return sendJSON(res, 401, { error: "login_required", login: "/__semesh/login", message: "Sign in with Semesh to call this paid endpoint." });
+    if (!RUNTIME_KEY) return sendJSON(res, 500, { error: "app_not_configured", message: "SEMESH_APP_API_KEY is missing." });
 
     let raw = "";
     for await (const c of req) raw += c;
@@ -181,7 +181,7 @@ const server = http.createServer(async (req, res) => {
       : "Summarize the following text in 2-3 sentences. Output only the summary.";
 
     try {
-      // The billable call. X-Settle-Payer (set inside settleFetch) bills the logged-in user.
+      // The billable call. X-Semesh-Payer (set inside semeshFetch) bills the logged-in user.
       const r = await invokeTool(
         {
           // TODO: this {messages:[...]} shape matches the llm.chat capability. If you switch CAPABILITY

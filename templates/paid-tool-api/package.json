@@ -2,7 +2,7 @@
   "name": "paid-tool-api",
   "version": "1.0.0",
   "private": true,
-  "description": "A SettleMesh paid API: one metered endpoint using delegated payer admission and explicit capture evidence.",
+  "description": "A Semesh paid API: one metered endpoint using delegated payer admission and explicit capture evidence.",
   "scripts": {
     "start": "node server.js",
     "test": "node --test server.test.js"

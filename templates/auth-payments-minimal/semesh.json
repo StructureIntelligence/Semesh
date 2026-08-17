@@ -1,0 +1,16 @@
+{
+  "name": "auth-payments-minimal",
+  "start": "node server.js",
+  "stack": {
+    "auth": {
+      "mode": "lazy",
+      "provider": "semesh",
+      "methods": ["semesh_oauth"],
+      "scopes": ["openid", "profile", "email", "wallet.read", "wallet.spend"]
+    },
+    "billing": {
+      "markup": 1.2
+    },
+    "runtime": { "cpu": 1, "memory": "512Mi" }
+  }
+}

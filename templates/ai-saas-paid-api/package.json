@@ -2,7 +2,7 @@
   "name": "ai-saas-paid-api",
   "version": "1.0.0",
   "private": true,
-  "description": "Pay-per-use AI app on SettleMesh — the signed-in end user is billed for each AI call against their own Aev wallet (X-Settle-Payer / end-user-pays).",
+  "description": "Pay-per-use AI app on Semesh — the signed-in end user is billed for each AI call against their own Aev wallet (X-Semesh-Payer / end-user-pays).",
   "scripts": {
     "start": "node server.js"
   },

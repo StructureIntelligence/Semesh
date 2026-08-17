@@ -142,7 +142,7 @@ for (const rejected of [
   assert.equal(safeFundingURL(rejected), null, `expected rejection: ${JSON.stringify(rejected)}`);
 }
 
-assert.equal(safeFundingURL("/__settle/billing?return=wallet"), "/__settle/billing?return=wallet");
+assert.equal(safeFundingURL("/__semesh/billing?return=wallet"), "/__semesh/billing?return=wallet");
 assert.equal(safeFundingURL("https://billing.example.com/topup?return=wallet"), "https://billing.example.com/topup?return=wallet");
 NODE
 }
@@ -225,7 +225,7 @@ reject_pattern \
   templates/auth-payments-minimal/README.md
 reject_pattern \
   'template fabricates a fixed hosted funding path instead of consuming live availability' \
-  '(?:topup|topup_url)\s*:\s*"\/__settle\/billing"' \
+  '(?:topup|topup_url)\s*:\s*"\/__semesh\/billing"' \
   templates/ai-saas-paid-api/server.js \
   templates/auth-payments-minimal/server.js
 
@@ -233,7 +233,7 @@ for server in \
   templates/ai-saas-paid-api/server.js \
   templates/auth-payments-minimal/server.js \
   templates/paid-tool-api/server.js; do
-  require_pattern "$server" 'explicit trusted capture header' 'x-settle-charged-aev'
+  require_pattern "$server" 'explicit trusted capture header' 'x-semesh-charged-aev'
   require_pattern "$server" 'settlement state is explicit' 'settlement_status'
   require_pattern "$server" 'logical operation identity is forwarded' 'Idempotency-Key'
 done
@@ -248,11 +248,11 @@ reject_pattern \
   'snippet persistence reads a raw payer/session token directly' \
   'extractPayerToken' \
   templates/agent-webapp-demo/app/api/snippets/route.ts
-require_pattern templates/agent-webapp-demo/lib/settlemesh.ts \
-  'session is resolved by the stable platform authority' '/__settle/me'
-require_pattern templates/agent-webapp-demo/lib/settlemesh.ts \
+require_pattern templates/agent-webapp-demo/lib/semesh.ts \
+  'session is resolved by the stable platform authority' '/__semesh/me'
+require_pattern templates/agent-webapp-demo/lib/semesh.ts \
   'resolver returns a non-sensitive principal id' 'principalId'
-require_pattern templates/agent-webapp-demo/lib/settlemesh.ts \
+require_pattern templates/agent-webapp-demo/lib/semesh.ts \
   'resolver verifies the authority authentication result' 'payload\.authenticated\s*!==\s*true'
 require_pattern templates/agent-webapp-demo/app/api/snippets/route.ts \
   'snippet reads fail closed when identity cannot be verified' 'resolveSettlePrincipal'
@@ -286,9 +286,9 @@ require_pattern templates/agent-webapp-demo/app/api/polish/route.ts \
   'polish requires one stable logical operation identity' 'Idempotency-Key'
 require_pattern templates/agent-webapp-demo/app/api/polish/route.ts \
   'polish returns explicit settlement state' 'settlement_status'
-require_pattern templates/agent-webapp-demo/lib/settlemesh.ts \
+require_pattern templates/agent-webapp-demo/lib/semesh.ts \
   'capability helper forwards logical operation identity' 'Idempotency-Key'
-require_pattern templates/agent-webapp-demo/lib/settlemesh.ts \
+require_pattern templates/agent-webapp-demo/lib/semesh.ts \
   'capability helper exposes trusted response headers' 'response\.headers'
 require_pattern templates/agent-webapp-demo/app/page.tsx \
   'browser preserves uncertain polish operation across reload' 'sessionStorage'
@@ -354,7 +354,7 @@ require_text agent.md \
   "A transport failure such as HTTP 502 leaves a paid call's outcome unknown. Preserve the original request and reconcile it; only resend when the server supports replay, using the exact same body and **\`Idempotency-Key\`** for that logical operation. A fresh key creates a fresh paid operation. Send an **\`Idempotency-Key\`** on retriable paid calls:"
 require_pattern agent.md \
   'only trusted capture evidence may be called charged' \
-  '(?:captured ledger.{0,160}x-settle-charged-aev|x-settle-charged-aev.{0,160}captured ledger)'
+  '(?:captured ledger.{0,160}x-semesh-charged-aev|x-semesh-charged-aev.{0,160}captured ledger)'
 require_text agent.md \
   'publish fee requirement is distinct from current charge admission' \
   '`fee_required` is separate from `will_charge`'
@@ -366,7 +366,7 @@ require_text agent.md \
   '`admission.fix`'
 require_text agent.md \
   'positive-quota recovery is inspection-only until named-service authorization' \
-  'inspection only: run `settlemesh services list --json`; freeing 1 shared service entry requires high-impact visibility changes and confirmation_required; obtain a separate explicit request naming each affected service before running `settlemesh services publish <explicitly-authorized-existing-service-id> --visibility private --json`; after the authorized changes, rerun `settlemesh services config-status <id> --json`'
+  'inspection only: run `semesh services list --json`; freeing 1 shared service entry requires high-impact visibility changes and confirmation_required; obtain a separate explicit request naming each affected service before running `semesh services publish <explicitly-authorized-existing-service-id> --visibility private --json`; after the authorized changes, rerun `semesh services config-status <id> --json`'
 require_text agent.md \
   'existing-service authorization does not add confirmation to ordinary publish' \
   'This separate authorization applies only to changing existing services; the ordinary publish itself still needs no duplicate confirmation.'
@@ -384,14 +384,14 @@ require_text agent.md \
   'the publish returns HTTP 503 with the same recovery fields before any hold, capture, or publication'
 require_pattern agent.md \
   'copyable publish flow branches before mutation and reads search after publish' \
-  'settlemesh services upload ./service\.json --json\s+settlemesh services config-status <id> --json\s+# continue only when publish_fee\.admission\.can_start_now is true:\s+settlemesh services publish <id> --visibility public --json\s+settlemesh search <service-id>'
+  'semesh services upload ./service\.json --json\s+semesh services config-status <id> --json\s+# continue only when publish_fee\.admission\.can_start_now is true:\s+semesh services publish <id> --visibility public --json\s+semesh search <service-id>'
 reject_pattern \
   'generic publish recovery hides quota-specific actions' \
   'publish within the free quota or wait until atomic publish settlement admission is available' \
   agent.md
 reject_pattern \
   'positive-quota recovery changes visibility without named-service authorization' \
-  'make at least 1 existing shared service entry private with `settlemesh services publish <existing-service-id> --visibility private --json`' \
+  'make at least 1 existing shared service entry private with `semesh services publish <existing-service-id> --visibility private --json`' \
   agent.md
 reject_pattern \
   'will_charge false is falsely presented as proof of a free publish' \

@@ -2,7 +2,7 @@
 //
 // POST /api/polish { body } -> { polished }
 //
-// This forwards the snippet text to a SettleMesh capability with an authenticated
+// This forwards the snippet text to a Semesh capability with an authenticated
 // delegated payer and one stable logical operation identity. Provider output and
 // HTTP success are useful execution evidence, but never settlement authority.
 
@@ -10,21 +10,21 @@ import {
   callCapability,
   extractPayerToken,
   isValidIdempotencyKey,
-} from "@/lib/settlemesh";
+} from "@/lib/semesh";
 
 export const dynamic = "force-dynamic";
 
-// TODO: set this to the capability/tool ID you want to meter. SettleMesh exposes
+// TODO: set this to the capability/tool ID you want to meter. Semesh exposes
 // a catalog of capabilities; pick the one that matches (e.g. a text-rewrite /
-// LLM helper) and put its ID here or in the SETTLEMESH_POLISH_CAPABILITY env var.
-// The agent guide at https://settlemesh.io/agent.md lists available capability
+// LLM helper) and put its ID here or in the SEMESH_POLISH_CAPABILITY env var.
+// The agent guide at https://semesh.io/agent.md lists available capability
 // IDs and their exact input contracts — confirm the input shape there before
 // going live. Until you set this, the route returns a local fallback so the demo
 // still runs end-to-end without charging anyone.
-const POLISH_CAPABILITY = process.env.SETTLEMESH_POLISH_CAPABILITY || "";
+const POLISH_CAPABILITY = process.env.SEMESH_POLISH_CAPABILITY || "";
 
 export async function POST(req: Request) {
-  // Never omit X-Settle-Payer: doing so would silently charge the app owner. Authenticate before
+  // Never omit X-Semesh-Payer: doing so would silently charge the app owner. Authenticate before
   // parsing operation input so every request without a delegated session has the same 401 contract.
   const payerToken = extractPayerToken(req);
   if (!payerToken) {
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       {
         error: {
           code: "login_required",
-          message: "Sign in with SettleMesh before starting a paid polish operation.",
+          message: "Sign in with Semesh before starting a paid polish operation.",
         },
       },
       { status: 401 }
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
 
   try {
     // NOTE: confirm the exact `input` field names for your chosen capability in
-    // https://settlemesh.io/agent.md — they vary per tool.
+    // https://semesh.io/agent.md — they vary per tool.
     const result = await callCapability<{
       output?: string;
       text?: string;

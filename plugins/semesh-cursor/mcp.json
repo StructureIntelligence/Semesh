@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "semesh": {
+      "command": "npx",
+      "args": ["-y", "semesh", "mcp"],
+      "env": {
+        "SEMESH_API_KEY": ""
+      }
+    }
+  }
+}

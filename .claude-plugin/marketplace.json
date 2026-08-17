@@ -1,18 +1,18 @@
 {
-  "name": "settlemesh",
+  "name": "semesh",
   "owner": {
     "name": "StructureIntelligence Inc.",
-    "url": "https://settlemesh.io"
+    "url": "https://semesh.io"
   },
   "metadata": {
-    "description": "Official SettleMesh plugins for Claude Code — call the capability catalog over MCP and inspect deployment readiness; new source deployment is currently unavailable.",
+    "description": "Official Semesh plugins for Claude Code — call the capability catalog over MCP and inspect deployment readiness; new source deployment is currently unavailable.",
     "version": "0.1.0"
   },
   "plugins": [
     {
-      "name": "settlemesh",
-      "source": "./plugins/settlemesh",
-      "description": "Discover and invoke the SettleMesh catalog, inspect deployment availability, and observe existing deployments. New source deployment is currently unavailable and fails closed."
+      "name": "semesh",
+      "source": "./plugins/semesh",
+      "description": "Discover and invoke the Semesh catalog, inspect deployment availability, and observe existing deployments. New source deployment is currently unavailable and fails closed."
     }
   ]
 }

@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-process.env.SETTLEMESH_APP_API_KEY = "test-runtime-key";
+process.env.SEMESH_APP_API_KEY = "test-runtime-key";
 const { captureEvidence, extractText } = require("./server.js");
 
 test("provider payload cost-like fields are output only, never settlement evidence", () => {
@@ -22,12 +22,12 @@ test("provider payload cost-like fields are output only, never settlement eviden
 
 test("only a valid explicit platform capture header proves captured money", () => {
   assert.deepEqual(
-    captureEvidence(new Headers({ "x-settle-charged-aev": "6" })),
+    captureEvidence(new Headers({ "x-semesh-charged-aev": "6" })),
     { settlement_status: "captured", captured_aev: 6 }
   );
   for (const value of ["", "not-a-number", "-1", "Infinity"]) {
     assert.deepEqual(
-      captureEvidence(new Headers({ "x-settle-charged-aev": value })),
+      captureEvidence(new Headers({ "x-semesh-charged-aev": value })),
       { settlement_status: "unknown", captured_aev: null }
     );
   }
@@ -80,7 +80,7 @@ test("non-2xx response preserves explicit trusted capture evidence", async (t) =
   globalThis.fetch = async () =>
     Response.json(
       { error: { code: "provider_result_unavailable" } },
-      { status: 502, headers: { "x-settle-charged-aev": "4" } }
+      { status: 502, headers: { "x-semesh-charged-aev": "4" } }
     );
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));

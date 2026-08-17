@@ -1,18 +1,18 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.settlemesh/cli",
-  "description": "Discover SettleMesh capabilities and inspect app deployment readiness; new source deployment is currently unavailable and fails closed.",
+  "name": "io.semesh/cli",
+  "description": "Discover Semesh capabilities and inspect app deployment readiness; new source deployment is currently unavailable and fails closed.",
   "repository": {
-    "url": "https://github.com/StructureIntelligence/settlemesh",
+    "url": "https://github.com/StructureIntelligence/semesh",
     "source": "github"
   },
   "version": "0.1.95",
-  "websiteUrl": "https://www.settlemesh.io",
+  "websiteUrl": "https://semesh.io",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
-      "identifier": "settlemesh",
+      "identifier": "semesh",
       "version": "0.1.95",
       "transport": {
         "type": "stdio"
@@ -26,8 +26,8 @@
       ],
       "environmentVariables": [
         {
-          "name": "SETTLE_API_KEY",
-          "description": "SettleMesh API key (sk-settle-...). Optional if you have run `settlemesh login` and a CLI session is stored. Never written to the protocol stream or logs.",
+          "name": "SEMESH_API_KEY",
+          "description": "Semesh API key (sk-semesh-...). Optional if you have run `semesh login` and a CLI session is stored. Never written to the protocol stream or logs.",
           "isSecret": true,
           "isRequired": false
         }
