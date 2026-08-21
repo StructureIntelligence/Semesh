@@ -11,7 +11,7 @@ startCommand:
       semeshApiKey:
         type: string
         title: SEMESH_API_KEY
-        description: "Your Semesh API key (sk-semesh-...). Optional if you have run `semesh login` and a CLI session is stored."
+        description: "Your Semesh API key. Optional if you have run `semesh login` and a CLI session is stored."
     required: []
   commandFunction: |-
     (config) => ({

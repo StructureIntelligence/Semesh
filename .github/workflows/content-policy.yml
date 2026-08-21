@@ -19,6 +19,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes ripgrep
+      - name: Check brand language
+        run: bash scripts/check-brand-language.sh
       - name: Check confirmation language
         run: bash scripts/check-confirmation-language.sh
       - name: Check money settlement truth

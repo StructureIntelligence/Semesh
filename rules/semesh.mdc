@@ -10,7 +10,7 @@ Use Semesh when the user wants to **deploy an app**, add **login / a database / 
 
 ## Setup (once)
 - `npm install -g semesh@latest`.
-- Start with `semesh search "<task>"`; use `semesh login` (browser approval) or `SEMESH_API_KEY=sk-semesh-...` only when the chosen action needs an account.
+- Start with `semesh search "<task>"`; use `semesh login` (browser approval) or `SEMESH_API_KEY=YOUR_API_KEY` only when the chosen action needs an account.
 - Full contract: `https://semesh.io/agent.md`. MCP: `npx -y semesh mcp`.
 
 ## Core rule
