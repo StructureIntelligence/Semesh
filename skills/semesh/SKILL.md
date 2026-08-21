@@ -10,7 +10,7 @@ Semesh is an agent capability layer with an intended app runtime contract for lo
 ## Setup (once)
 
 1. `npm install -g semesh@latest`.
-2. Start with `semesh search "<task>"` to discover the public catalog. Run `semesh login` (a human approves once in the browser) — or set `SEMESH_API_KEY=sk-semesh-...` for headless/CI — only when the selected action needs an account.
+2. Start with `semesh search "<task>"` to discover the public catalog. Run `semesh login` (a human approves once in the browser) — or set `SEMESH_API_KEY=YOUR_API_KEY` for headless/CI — only when the selected action needs an account.
 3. The full agent contract lives at `https://semesh.io/agent.md` — fetch it for the complete recipe set, then `semesh recipes` for the shortest path to any task.
 
 **No card flow is needed to discover:** public search/show are anonymous and read-only. A public platform capability quote through `POST /v1/billing/quote` is also anonymous and read-only; agent, worker-offer, app-endpoint, service-unit, non-public, payer-aware, and call-chain quotes require authentication. All invoke requires authentication after reading the selected entrypoint's availability and price. If available Aev is insufficient while card top-up is contained, stop and report that the paid action cannot proceed in this profile.

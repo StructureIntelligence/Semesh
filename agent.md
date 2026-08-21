@@ -56,7 +56,7 @@ curl -X POST -H "Content-Type: application/json" \
   "https://api.semesh.net/v1/billing/quote"
 
 # 4. Only after choosing an account-required action, provide a key.
-export SEMESH_API_KEY="sk-semesh-..."
+export SEMESH_API_KEY="YOUR_API_KEY"
 
 # 5. Invoke — the canonical prefix is /v1/capabilities/ (NOT /v1/tools/)
 curl -X POST -H "Authorization: Bearer $SEMESH_API_KEY" -H "Content-Type: application/json" \
@@ -103,7 +103,7 @@ The npm package and primary command are both `semesh`. The older `settle`, `sett
 - **Interactive:** `semesh login` — complete browser sign-in to authorize this CLI; the CLI reuses the stored session.
 - **Headless / CI / agent runs (no browser):** set an API key, sent as `Authorization: Bearer <key>`:
   ```bash
-  export SEMESH_API_KEY="sk-semesh-..."
+  export SEMESH_API_KEY="YOUR_API_KEY"
   semesh whoami --json   # 200 = authed; 401 invalid_api_key = wrong/missing key, fix it before continuing
   ```
   Create/copy a key from your Semesh account dashboard (https://semesh.io). Run `whoami`
@@ -113,12 +113,12 @@ The npm package and primary command are both `semesh`. The older `settle`, `sett
 
 If your runtime speaks the Model Context Protocol, expose the whole Semesh capability catalog as MCP tools instead of (or alongside) the CLI: run `semesh mcp` — a stdio JSON-RPC server. It reuses your `semesh login` session or `SEMESH_API_KEY`; the key never touches the protocol stream or logs.
 
-- **Claude Code:** `claude mcp add semesh --env SEMESH_API_KEY=sk-semesh-... -- npx -y semesh mcp`
+- **Claude Code:** `claude mcp add semesh --env SEMESH_API_KEY=YOUR_API_KEY -- npx -y semesh mcp`
 - **Claude Desktop / Cursor** (`claude_desktop_config.json` / `~/.cursor/mcp.json`):
   ```json
-  {"mcpServers":{"semesh":{"command":"npx","args":["-y","semesh","mcp"],"env":{"SEMESH_API_KEY":"sk-semesh-..."}}}}
+  {"mcpServers":{"semesh":{"command":"npx","args":["-y","semesh","mcp"],"env":{"SEMESH_API_KEY":"YOUR_API_KEY"}}}}
   ```
-- **Codex** (`~/.codex/config.toml`): `[mcp_servers.semesh]` with `command = "npx"`, `args = ["-y","semesh","mcp"]`, `env = { SEMESH_API_KEY = "sk-semesh-..." }`.
+- **Codex** (`~/.codex/config.toml`): `[mcp_servers.semesh]` with `command = "npx"`, `args = ["-y","semesh","mcp"]`, `env = { SEMESH_API_KEY = "YOUR_API_KEY" }`.
 
 The server exposes a capability-invoke tool over the same search→show→quote→call loop below: search for a tool, inspect it, quote the exact paid call, then invoke any catalog capability by id. An ordinary paid call settles Aev automatically and does not need confirmation merely because it is paid. Ask for a separate confirmation only when the action is destructive, high-impact, authorization-expanding, truly irreversible, or its contract explicitly marks `requires_confirmation`. The same Aev billing, quotes, and error contract apply. Run `semesh login` first to omit the key.
 

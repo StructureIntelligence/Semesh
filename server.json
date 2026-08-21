@@ -27,7 +27,7 @@
       "environmentVariables": [
         {
           "name": "SEMESH_API_KEY",
-          "description": "Semesh API key (sk-semesh-...). Optional if you have run `semesh login` and a CLI session is stored. Never written to the protocol stream or logs.",
+          "description": "Semesh API key. Optional if you have run `semesh login` and a CLI session is stored. Never written to the protocol stream or logs.",
           "isSecret": true,
           "isRequired": false
         }

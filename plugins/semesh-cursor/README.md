@@ -18,7 +18,7 @@ managed SQL, hosted agents) — every call metered, with a cost quote up front.
 
 ```bash
 npm install -g semesh@latest
-semesh login        # browser approval — or set SEMESH_API_KEY=sk-semesh-... for headless
+semesh login        # browser approval — or set SEMESH_API_KEY=YOUR_API_KEY for headless
 ```
 
 ## Install

@@ -32,7 +32,7 @@ npx -y semesh mcp
 Claude Code one-line setup:
 
 ```bash
-claude mcp add semesh --env SEMESH_API_KEY=sk-semesh-... -- npx -y semesh mcp
+claude mcp add semesh --env SEMESH_API_KEY=YOUR_API_KEY -- npx -y semesh mcp
 ```
 
 (or run `semesh login` first and omit the key). Per-client config snippets are in [`cursor/mcp.json`](./cursor/mcp.json) and the Claude Code plugin below.
