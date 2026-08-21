@@ -9,40 +9,41 @@ fi
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-# Check only Git-tracked current public surfaces. Protocol compatibility
-# identifiers are intentionally outside this case-sensitive display-name
-# pattern: examples include SETTLEMESH_API_KEY, settlemesh.json, and
-# settlemesh.io.
-brand_pattern='\bSettle[[:space:]-]?Mesh\b'
-git_brand_pattern='Settle([[:space:]-]?Mesh)'
-surfaces=(
-  .agents
-  .claude-plugin
-  .cursor-plugin
-  .mcp.json
-  NOTICE
-  README.md
-  agent.md
-  commands
-  cursor
-  docs
-  glama.json
-  llms-install.md
-  llms.txt
-  plugins
-  rules
-  semesh.latest.json
-  server.json
-  skills
-  smithery.yaml
-  templates
+# Public is itself the active integration layer, so inspect every Git-tracked
+# path and text file. A persistent compatibility token must opt in on its exact
+# source line with this marker; broad case/prefix exemptions would also let a
+# new default, slug, or public filename silently regress.
+brand_pattern='settle([[:space:]_-]?mesh)'
+allow_marker='brand-lint: allow-legacy'
+content_exclusions=(
+  scripts/check-brand-language.sh
 )
+legacy_path_allowlist=()
+
+line_is_violation() {
+  local value="$1"
+  if [[ "$value" == *"$allow_marker"* ]]; then
+    return 1
+  fi
+  printf '%s\n' "$value" | rg -q -i -e "$brand_pattern"
+}
+
+path_is_allowlisted() {
+  local value="$1"
+  local allowed
+  for allowed in "${legacy_path_allowlist[@]}"; do
+    if [[ "$value" == "$allowed" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
 self_test_failed=0
 
 assert_rejects() {
   local value="$1"
-  if ! printf '%s\n' "$value" | rg -q -- "$brand_pattern"; then
+  if ! printf '%s\n' "$value" | rg -q -i -e "$brand_pattern"; then
     printf 'brand-language self-test FAIL (expected reject): %s\n' "$value" >&2
     self_test_failed=1
   fi
@@ -50,7 +51,7 @@ assert_rejects() {
 
 assert_allows() {
   local value="$1"
-  if printf '%s\n' "$value" | rg -q -- "$brand_pattern"; then
+  if printf '%s\n' "$value" | rg -q -i -e "$brand_pattern"; then
     printf 'brand-language self-test FAIL (expected allow): %s\n' "$value" >&2
     self_test_failed=1
   fi
@@ -59,25 +60,58 @@ assert_allows() {
 assert_rejects 'SettleMesh'
 assert_rejects 'Settle Mesh'
 assert_rejects 'Settle-Mesh'
-assert_allows 'SETTLEMESH_API_KEY'
-assert_allows 'settlemesh.json'
-assert_allows 'https://www.settlemesh.io'
+assert_rejects 'settlemesh'
+assert_rejects 'SETTLEMESH_API_KEY'
+assert_rejects 'settlemesh.json'
+assert_allows 'SEMESH_API_KEY'
+assert_allows 'semesh.json'
+
+if line_is_violation "SETTLEMESH_API_KEY # $allow_marker"; then
+  printf 'brand-language self-test FAIL (compatibility marker ignored)\n' >&2
+  self_test_failed=1
+fi
 
 if (( self_test_failed )); then
   exit 1
 fi
 
+failed=0
+
+while IFS= read -r tracked_path; do
+  if printf '%s\n' "$tracked_path" | rg -q -i -e "$brand_pattern" &&
+    ! path_is_allowlisted "$tracked_path"; then
+    printf 'brand-language path violation: %s\n' "$tracked_path" >&2
+    failed=1
+  fi
+done < <(git ls-files)
+
 matches=''
 status=0
-matches="$(git grep -n -I -E -- "$git_brand_pattern" -- "${surfaces[@]}")" || status=$?
+matches="$(git grep -n -I -i -E -- "$brand_pattern" -- . \
+  "${content_exclusions[@]/#/:(exclude)}")" || status=$?
 
 if (( status == 0 )); then
-  printf '%s\n' "$matches" >&2
-  printf 'brand-language violation: use Semesh for active public display copy\n' >&2
-  exit 1
-fi
-if (( status != 1 )); then
+  filtered_matches=''
+  while IFS= read -r match; do
+    if line_is_violation "$match"; then
+      if [[ -n "$filtered_matches" ]]; then
+        filtered_matches+=$'\n'
+      fi
+      filtered_matches+="$match"
+    fi
+  done <<<"$matches"
+  if [[ -n "$filtered_matches" ]]; then
+    printf '%s\n' "$filtered_matches" >&2
+    printf 'brand-language violation: use Semesh for public copy, paths, and new defaults\n' >&2
+    printf 'mark an exact persistent compatibility line with: %s\n' "$allow_marker" >&2
+    failed=1
+  fi
+elif (( status != 1 )); then
   exit "$status"
+fi
+
+if (( failed )); then
+  exit 1
 fi
 
 printf 'brand-language guard: PASS\n'
