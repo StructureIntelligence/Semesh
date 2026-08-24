@@ -10,11 +10,8 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 # Public is itself the active integration layer, so inspect every Git-tracked
-# path and text file. A persistent compatibility token must opt in on its exact
-# source line with this marker; broad case/prefix exemptions would also let a
-# new default, slug, or public filename silently regress.
-brand_pattern='settle([[:space:]_-]?mesh)'
-allow_marker='brand-lint: allow-legacy'
+# path and text file. There are no active compatibility exemptions.
+brand_pattern='settle([[:space:]_-]?mesh|kit|[[:space:]_-]?site|\.user_id|-native)'
 content_exclusions=(
   scripts/check-brand-language.sh
 )
@@ -22,9 +19,6 @@ legacy_path_allowlist=()
 
 line_is_violation() {
   local value="$1"
-  if [[ "$value" == *"$allow_marker"* ]]; then
-    return 1
-  fi
   printf '%s\n' "$value" | rg -q -i -e "$brand_pattern"
 }
 
@@ -57,19 +51,21 @@ assert_allows() {
   fi
 }
 
-assert_rejects 'SettleMesh'
+legacy_compact="$(printf '%s%s' 'settle' 'mesh')"
+legacy_title="$(printf '%s%s' 'Settle' 'Mesh')"
+legacy_upper="$(printf '%s' "$legacy_compact" | tr '[:lower:]' '[:upper:]')"
+assert_rejects "$legacy_title"
 assert_rejects 'Settle Mesh'
 assert_rejects 'Settle-Mesh'
-assert_rejects 'settlemesh'
-assert_rejects 'SETTLEMESH_API_KEY'
-assert_rejects 'settlemesh.json'
+assert_rejects "$legacy_compact"
+assert_rejects "${legacy_upper}_API_KEY"
+assert_rejects "$legacy_compact.json"
+assert_rejects 'settlekit'
+assert_rejects 'settle-site'
+assert_rejects 'settle.user_id'
+assert_rejects 'Settle-native'
 assert_allows 'SEMESH_API_KEY'
 assert_allows 'semesh.json'
-
-if line_is_violation "SETTLEMESH_API_KEY # $allow_marker"; then
-  printf 'brand-language self-test FAIL (compatibility marker ignored)\n' >&2
-  self_test_failed=1
-fi
 
 if (( self_test_failed )); then
   exit 1
@@ -103,7 +99,6 @@ if (( status == 0 )); then
   if [[ -n "$filtered_matches" ]]; then
     printf '%s\n' "$filtered_matches" >&2
     printf 'brand-language violation: use Semesh for public copy, paths, and new defaults\n' >&2
-    printf 'mark an exact persistent compatibility line with: %s\n' "$allow_marker" >&2
     failed=1
   fi
 elif (( status != 1 )); then

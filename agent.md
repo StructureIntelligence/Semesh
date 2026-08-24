@@ -97,7 +97,7 @@ semesh doctor --require-latest
 semesh whoami --json     # 200 = the saved login/key is ready; 401 = fix auth before continuing
 ```
 
-The npm package and primary command are both `semesh`. The older `settle`, `settlekit`, and `kit` aliases still work for compatibility.
+The npm package and command are both `semesh`.
 
 **Auth — two ways:**
 - **Interactive:** `semesh login` — complete browser sign-in to authorize this CLI; the CLI reuses the stored session.
@@ -414,9 +414,9 @@ The platform isolates **apps** from each other (each app gets its own schema + r
 
 2. **Tell the database who the end-user is, per request.** The user id is the authenticated subject (the `__semesh` session / `X-Semesh-User-ID`), never something the browser hands you:
    - **Control-plane query:** `semesh db query <project-id> --sql "select * from notes" --user <user-sub>` (or `POST .../database/query` with `"user_id": "<user-sub>"`).
-   - **Direct `DATABASE_URL` (keep your ORM + transactions):** inside an **explicit transaction**, make its **first statement** `SET LOCAL "settle.user_id" = '<user-sub>'` — bind the value as a parameter or escape it (the sub is the authenticated subject, never a raw browser value). Every ORM exposes a per-transaction hook for this; afterwards ordinary queries see only that user's rows — no `WHERE user_id` needed. (`SET LOCAL` only lasts the transaction; in autocommit mode it is a no-op and the query then fail-closes to zero rows — so wrap it in a transaction.)
+   - **Direct `DATABASE_URL` (keep your ORM + transactions):** inside an **explicit transaction**, make its **first statement** `SET LOCAL "semesh.user_id" = '<user-sub>'` — bind the value as a parameter or escape it (the sub is the authenticated subject, never a raw browser value). Every ORM exposes a per-transaction hook for this; afterwards ordinary queries see only that user's rows — no `WHERE user_id` needed. (`SET LOCAL` only lasts the transaction; in autocommit mode it is a no-op and the query then fail-closes to zero rows — so wrap it in a transaction.)
 
-3. **Fail-closed:** if `settle.user_id` is never set, an RLS table returns **zero rows** and rejects writes — so a missed bind is a safe empty result, not a cross-user leak.
+3. **Fail-closed:** if `semesh.user_id` is never set, an RLS table returns **zero rows** and rejects writes — so a missed bind is a safe empty result, not a cross-user leak.
 
 Read the live operational bounds (query row/byte caps, per-app connection cap + pool math, idle-disconnect window, delete-recoverability, storage-metering rate) from `GET /v1/runtime/config` → `limits` — don't hardcode them.
 
@@ -524,7 +524,7 @@ semesh services publish <id> --visibility public --json
 semesh search <service-id>
 ```
 
-Set per-call/per-duration/per-token pricing in the service card so callers pay Aev and you keep **100% of owner revenue** (zero platform tax; revenue paid from platform-granted promo credit arrives as non-withdrawable granted credit — spendable, not cashable). Wrapping a fixed-price platform capability? Use `pricing: {mode: platform_markup, multiplier: 1.1|1.3|1.5}` — you charge platform-cost × multiplier; you're granted the full charge and pay the platform base once, so you net platform-cost × (m−1). Caller-byok markup is unsupported. Flat pricing must be ≥ the priciest operation's platform base cost (the publish call 422s below that floor, telling you the exact number). To register an existing website as a Settle-native service, see `semesh sites --help`. Run `semesh services --help` for the full lifecycle.
+Set per-call/per-duration/per-token pricing in the service card so callers pay Aev and you keep **100% of owner revenue** (zero platform tax; revenue paid from platform-granted promo credit arrives as non-withdrawable granted credit — spendable, not cashable). Wrapping a fixed-price platform capability? Use `pricing: {mode: platform_markup, multiplier: 1.1|1.3|1.5}` — you charge platform-cost × multiplier; you're granted the full charge and pay the platform base once, so you net platform-cost × (m−1). Caller-byok markup is unsupported. Flat pricing must be ≥ the priciest operation's platform base cost (the publish call 422s below that floor, telling you the exact number). To register an existing website as a Semesh-native service, see `semesh sites --help`. Run `semesh services --help` for the full lifecycle.
 
 **Read the publish-fee admission before publishing.** After `upload`, run `semesh services config-status <id> --json` (or `GET /v1/dynamic-services/{id}` / `.../{id}/config-status` over HTTP) and inspect the top-level `publish_fee` object:
 ```
