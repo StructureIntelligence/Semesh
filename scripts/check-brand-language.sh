@@ -13,7 +13,7 @@ cd "$root"
 # path and text file. A persistent compatibility token must opt in on its exact
 # source line with this marker; broad case/prefix exemptions would also let a
 # new default, slug, or public filename silently regress.
-brand_pattern='settle([[:space:]_-]?mesh)'
+brand_pattern='settle([[:space:]_-]?mesh|-native)'
 allow_marker='brand-lint: allow-legacy'
 content_exclusions=(
   scripts/check-brand-language.sh
@@ -60,6 +60,7 @@ assert_allows() {
 assert_rejects 'SettleMesh'
 assert_rejects 'Settle Mesh'
 assert_rejects 'Settle-Mesh'
+assert_rejects 'Settle-native'
 assert_rejects 'settlemesh'
 assert_rejects 'SETTLEMESH_API_KEY'
 assert_rejects 'settlemesh.json'
