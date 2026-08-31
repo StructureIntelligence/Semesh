@@ -175,6 +175,18 @@ test("admits a merge-ref workflow at the event merge SHA when runner identity di
   assertPass(scenario);
 });
 
+test("admits a runner-bound merge ref while the event merge SHA is temporarily null", () => {
+  const scenario = pullRequestScenario();
+  scenario.event.pull_request.merge_commit_sha = null;
+  assertPass(scenario);
+});
+
+test("admits a runner-bound merge ref while the event merge SHA is omitted", () => {
+  const scenario = pullRequestScenario();
+  delete scenario.event.pull_request.merge_commit_sha;
+  assertPass(scenario);
+});
+
 const hostileScenarios = [
   [
     "foreign repository",
@@ -268,19 +280,22 @@ const hostileScenarios = [
     "checkout_sha_mismatch",
   ],
   [
-    "pull request merge sha is null",
+    "pull request merge sha is malformed",
     () => {
       const scenario = pullRequestScenario();
-      scenario.event.pull_request.merge_commit_sha = null;
+      scenario.event.pull_request.merge_commit_sha = "not-a-sha";
       return scenario;
     },
     "pull_request_merge_sha_invalid",
   ],
   [
-    "pull request merge sha is omitted",
+    "pull request merge sha is a coercible array",
     () => {
       const scenario = pullRequestScenario();
-      delete scenario.event.pull_request.merge_commit_sha;
+      scenario.event.pull_request.merge_commit_sha = [mergeSHA];
+      scenario.env.GITHUB_WORKFLOW_REF =
+        "StructureIntelligence/Semesh/.github/workflows/content-policy.yml@refs/heads/main";
+      scenario.env.GITHUB_WORKFLOW_SHA = baseSHA;
       return scenario;
     },
     "pull_request_merge_sha_invalid",
@@ -308,6 +323,16 @@ const hostileScenarios = [
     () => {
       const scenario = pullRequestScenario();
       scenario.env.GITHUB_SHA = runnerMergeSHA;
+      scenario.env.GITHUB_WORKFLOW_SHA = "4".repeat(40);
+      return scenario;
+    },
+    "workflow_sha_mismatch",
+  ],
+  [
+    "missing event merge identity cannot admit a third workflow sha",
+    () => {
+      const scenario = pullRequestScenario();
+      scenario.event.pull_request.merge_commit_sha = null;
       scenario.env.GITHUB_WORKFLOW_SHA = "4".repeat(40);
       return scenario;
     },

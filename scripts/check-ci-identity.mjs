@@ -30,7 +30,7 @@ function requireEqual(label, actual, expected) {
 }
 
 function requireSHA(label, value) {
-  if (!SHA_PATTERN.test(value)) {
+  if (typeof value !== "string" || !SHA_PATTERN.test(value)) {
     throw new Error(`${label}_invalid`);
   }
   return value;
@@ -151,7 +151,10 @@ function validatePullRequest(event, expectedCheckoutSHA, workflowRef, workflowSH
   }
 
   const githubSHA = requireSHA("github_sha", requireValue("GITHUB_SHA"));
-  const mergeSHA = requireSHA("pull_request_merge_sha", pullRequest.merge_commit_sha);
+  let mergeSHA = null;
+  if (pullRequest.merge_commit_sha !== null && pullRequest.merge_commit_sha !== undefined) {
+    mergeSHA = requireSHA("pull_request_merge_sha", pullRequest.merge_commit_sha);
+  }
 
   const mergeRef = `refs/pull/${event.number}/merge`;
   requireEqual("github_ref", requireValue("GITHUB_REF"), mergeRef);
@@ -167,9 +170,11 @@ function validatePullRequest(event, expectedCheckoutSHA, workflowRef, workflowSH
   const workflowSourceRef = workflowRef.slice(workflowPrefix.length);
   const trustedWorkflowSources = [
     [mergeRef, githubSHA],
-    [mergeRef, mergeSHA],
     ["refs/heads/main", baseSHA],
   ];
+  if (mergeSHA !== null) {
+    trustedWorkflowSources.push([mergeRef, mergeSHA]);
+  }
   if (pullRequest.head.repo.full_name === EXPECTED.repository) {
     trustedWorkflowSources.push([`refs/heads/${pullRequest.head.ref}`, headSHA]);
   }
