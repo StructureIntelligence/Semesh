@@ -175,6 +175,18 @@ test("admits a merge-ref workflow at the event merge SHA when runner identity di
   assertPass(scenario);
 });
 
+test("admits a runner-bound merge ref while the event merge SHA is temporarily null", () => {
+  const scenario = pullRequestScenario();
+  scenario.event.pull_request.merge_commit_sha = null;
+  assertPass(scenario);
+});
+
+test("admits a runner-bound merge ref while the event merge SHA is omitted", () => {
+  const scenario = pullRequestScenario();
+  delete scenario.event.pull_request.merge_commit_sha;
+  assertPass(scenario);
+});
+
 const hostileScenarios = [
   [
     "foreign repository",
@@ -268,19 +280,22 @@ const hostileScenarios = [
     "checkout_sha_mismatch",
   ],
   [
-    "pull request merge sha is null",
+    "pull request merge sha is malformed",
     () => {
       const scenario = pullRequestScenario();
-      scenario.event.pull_request.merge_commit_sha = null;
+      scenario.event.pull_request.merge_commit_sha = "not-a-sha";
       return scenario;
     },
     "pull_request_merge_sha_invalid",
   ],
   [
-    "pull request merge sha is omitted",
+    "pull request merge sha is a coercible array",
     () => {
       const scenario = pullRequestScenario();
-      delete scenario.event.pull_request.merge_commit_sha;
+      scenario.event.pull_request.merge_commit_sha = [mergeSHA];
+      scenario.env.GITHUB_WORKFLOW_REF =
+        "StructureIntelligence/Semesh/.github/workflows/content-policy.yml@refs/heads/main";
+      scenario.env.GITHUB_WORKFLOW_SHA = baseSHA;
       return scenario;
     },
     "pull_request_merge_sha_invalid",
@@ -314,6 +329,16 @@ const hostileScenarios = [
     "workflow_sha_mismatch",
   ],
   [
+    "missing event merge identity cannot admit a third workflow sha",
+    () => {
+      const scenario = pullRequestScenario();
+      scenario.event.pull_request.merge_commit_sha = null;
+      scenario.env.GITHUB_WORKFLOW_SHA = "4".repeat(40);
+      return scenario;
+    },
+    "workflow_sha_mismatch",
+  ],
+  [
     "fork head main cannot replace the base workflow sha",
     () => {
       const scenario = pullRequestScenario();
@@ -338,7 +363,7 @@ test("workflow freezes the reviewed supply chain and keeps one required job", ()
   const workflow = readFileSync(path.join(root, ".github/workflows/content-policy.yml"), "utf8");
   assert.equal(
     createHash("sha256").update(workflow).digest("hex"),
-    "69cbf02f38e089c9956b552b5aa10a45daf4c116ac21d384c4f21ccc0e526c22",
+    "ee1d4e0920585f44df5f47e186a36d4e5e2156dfad222235e9e473d81e84e95d",
   );
   assert.match(workflow, /runs-on: ubuntu-24\.04/u);
   assert.match(workflow, /timeout-minutes: 5/u);
@@ -353,6 +378,15 @@ test("workflow freezes the reviewed supply chain and keeps one required job", ()
   );
   assert.match(workflow, /persist-credentials: false/u);
   assert.match(workflow, /SEMESH_EXPECTED_CHECKOUT_SHA:/u);
+  assert.match(workflow, /--connect-timeout 10 --max-time 50 --retry 2 --retry-max-time 50/u);
+  assert.equal(
+    workflow.match(/node scripts\/run-ci-heartbeat\.mjs --/gu)?.length ?? 0,
+    6,
+  );
+  assert.ok(
+    workflow.indexOf("name: Verify exact CI identity") <
+      workflow.indexOf("name: Install exact ripgrep"),
+  );
   assert.doesNotMatch(workflow, /uses:\s+[^\n]+@(v\d+|main|master)\b/u);
   assert.doesNotMatch(workflow, /ubuntu-latest|apt-get|actions\/cache|cache:/u);
   assert.equal(workflow.match(/^  confirmation-language:$/gm)?.length ?? 0, 1);
