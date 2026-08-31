@@ -14,6 +14,7 @@ const headSHA = execFileSync("git", ["rev-parse", "HEAD"], {
 }).trim();
 const baseSHA = "1".repeat(40);
 const mergeSHA = "2".repeat(40);
+const runnerMergeSHA = "3".repeat(40);
 
 function baseEnvironment() {
   return {
@@ -151,6 +152,29 @@ test("admits a fork whose head branch is also named main with the base workflow"
   assertPass(scenario);
 });
 
+test("admits a same-repository head run without equating it to the merge commit", () => {
+  const scenario = pullRequestScenario();
+  scenario.env.GITHUB_SHA = headSHA;
+  scenario.env.GITHUB_WORKFLOW_REF =
+    "StructureIntelligence/Semesh/.github/workflows/content-policy.yml@refs/heads/ci-hardening";
+  scenario.env.GITHUB_WORKFLOW_SHA = headSHA;
+  scenario.event.pull_request.head.repo = repository();
+  assertPass(scenario);
+});
+
+test("admits a merge-ref workflow at the runner SHA when event merge identity differs", () => {
+  const scenario = pullRequestScenario();
+  scenario.env.GITHUB_SHA = runnerMergeSHA;
+  scenario.env.GITHUB_WORKFLOW_SHA = runnerMergeSHA;
+  assertPass(scenario);
+});
+
+test("admits a merge-ref workflow at the event merge SHA when runner identity differs", () => {
+  const scenario = pullRequestScenario();
+  scenario.env.GITHUB_SHA = runnerMergeSHA;
+  assertPass(scenario);
+});
+
 const hostileScenarios = [
   [
     "foreign repository",
@@ -244,15 +268,6 @@ const hostileScenarios = [
     "checkout_sha_mismatch",
   ],
   [
-    "pull request merge sha drifts from run",
-    () => {
-      const scenario = pullRequestScenario();
-      scenario.event.pull_request.merge_commit_sha = "6".repeat(40);
-      return scenario;
-    },
-    "pull_request_merge_sha_mismatch",
-  ],
-  [
     "pull request merge sha is null",
     () => {
       const scenario = pullRequestScenario();
@@ -284,6 +299,16 @@ const hostileScenarios = [
     () => {
       const scenario = pullRequestScenario();
       scenario.env.GITHUB_WORKFLOW_SHA = baseSHA;
+      return scenario;
+    },
+    "workflow_sha_mismatch",
+  ],
+  [
+    "divergent merge identities cannot admit a third workflow sha",
+    () => {
+      const scenario = pullRequestScenario();
+      scenario.env.GITHUB_SHA = runnerMergeSHA;
+      scenario.env.GITHUB_WORKFLOW_SHA = "4".repeat(40);
       return scenario;
     },
     "workflow_sha_mismatch",

@@ -151,11 +151,7 @@ function validatePullRequest(event, expectedCheckoutSHA, workflowRef, workflowSH
   }
 
   const githubSHA = requireSHA("github_sha", requireValue("GITHUB_SHA"));
-  requireEqual(
-    "pull_request_merge_sha",
-    requireSHA("pull_request_merge_sha", pullRequest.merge_commit_sha),
-    githubSHA,
-  );
+  const mergeSHA = requireSHA("pull_request_merge_sha", pullRequest.merge_commit_sha);
 
   const mergeRef = `refs/pull/${event.number}/merge`;
   requireEqual("github_ref", requireValue("GITHUB_REF"), mergeRef);
@@ -171,6 +167,7 @@ function validatePullRequest(event, expectedCheckoutSHA, workflowRef, workflowSH
   const workflowSourceRef = workflowRef.slice(workflowPrefix.length);
   const trustedWorkflowSources = [
     [mergeRef, githubSHA],
+    [mergeRef, mergeSHA],
     ["refs/heads/main", baseSHA],
   ];
   if (pullRequest.head.repo.full_name === EXPECTED.repository) {
