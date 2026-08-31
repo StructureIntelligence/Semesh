@@ -11,14 +11,43 @@ permissions:
 
 jobs:
   confirmation-language:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install ripgrep
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          repository: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up exact Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22.23.1
+      - name: Install exact ripgrep
+        env:
+          RG_VERSION: 15.2.0
+          RG_REVISION: e89fff89ac
+          RG_SHA256: 33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes ripgrep
+          set -euo pipefail
+          rg_archive="$RUNNER_TEMP/ripgrep-$RG_VERSION-x86_64-unknown-linux-musl.tar.gz"
+          rg_root="$RUNNER_TEMP/ripgrep-$RG_VERSION"
+          curl --fail --location --proto '=https' --tlsv1.2 --retry 3 \
+            --output "$rg_archive" \
+            "https://github.com/BurntSushi/ripgrep/releases/download/$RG_VERSION/ripgrep-$RG_VERSION-x86_64-unknown-linux-musl.tar.gz"
+          printf '%s  %s\n' "$RG_SHA256" "$rg_archive" | sha256sum --check --strict
+          mkdir "$rg_root"
+          tar --extract --gzip --file "$rg_archive" --directory "$rg_root" --strip-components=1
+          test "$("$rg_root/rg" --version | sed -n '1p')" = "ripgrep $RG_VERSION (rev $RG_REVISION)"
+          printf '%s\n' "$rg_root" >> "$GITHUB_PATH"
+      - name: Verify exact CI identity
+        env:
+          SEMESH_EXPECTED_CHECKOUT_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/check-ci-identity.mjs
+      - name: Test CI identity guard
+        run: node --test scripts/check-ci-identity.test.mjs
       - name: Check brand language
         run: bash scripts/check-brand-language.sh
       - name: Check confirmation language
