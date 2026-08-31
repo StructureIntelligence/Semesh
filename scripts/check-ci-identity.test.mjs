@@ -313,7 +313,7 @@ test("workflow freezes the reviewed supply chain and keeps one required job", ()
   const workflow = readFileSync(path.join(root, ".github/workflows/content-policy.yml"), "utf8");
   assert.equal(
     createHash("sha256").update(workflow).digest("hex"),
-    "d9705103389e228c962da78790a790bb1e9655e54803246c1d36f4bd8f1065ae",
+    "69cbf02f38e089c9956b552b5aa10a45daf4c116ac21d384c4f21ccc0e526c22",
   );
   assert.match(workflow, /runs-on: ubuntu-24\.04/u);
   assert.match(workflow, /timeout-minutes: 5/u);
@@ -321,6 +321,7 @@ test("workflow freezes the reviewed supply chain and keeps one required job", ()
   assert.match(workflow, /actions\/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38/u);
   assert.match(workflow, /node-version: 22\.23\.1/u);
   assert.match(workflow, /RG_VERSION: 15\.2\.0/u);
+  assert.match(workflow, /RG_REVISION: e89fff89ac/u);
   assert.match(
     workflow,
     /RG_SHA256: 33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c/u,

@@ -28,6 +28,7 @@ jobs:
       - name: Install exact ripgrep
         env:
           RG_VERSION: 15.2.0
+          RG_REVISION: e89fff89ac
           RG_SHA256: 33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c
         run: |
           set -euo pipefail
@@ -39,7 +40,7 @@ jobs:
           printf '%s  %s\n' "$RG_SHA256" "$rg_archive" | sha256sum --check --strict
           mkdir "$rg_root"
           tar --extract --gzip --file "$rg_archive" --directory "$rg_root" --strip-components=1
-          test "$("$rg_root/rg" --version | sed -n '1p')" = "ripgrep $RG_VERSION"
+          test "$("$rg_root/rg" --version | sed -n '1p')" = "ripgrep $RG_VERSION (rev $RG_REVISION)"
           printf '%s\n' "$rg_root" >> "$GITHUB_PATH"
       - name: Verify exact CI identity
         env:
