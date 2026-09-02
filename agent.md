@@ -32,7 +32,7 @@ Semesh is the launch layer for agent-built apps: one deploy can provide app logi
 - **Your app makes paid calls on an end user's behalf** → send the `X-Semesh-Payer` header so the *user's* wallet is charged for the compute they trigger, not yours. You can add a markup on top of cost.
 - **You're preparing a web app for Semesh delivery** → start with `semesh deploy preflight . --full-stack --json`. The owner CLI is the intended source-deploy entrypoint, but deployment authorization is currently unavailable and fails closed with `deployment_authorization_unavailable` before upload, build, payment, or publication. Existing app records remain observable with the status, logs, and URL commands below.
 - **You need managed auth + a database** without standing up Auth0 / Supabase / Postgres → declare `stack.auth` + `stack.database`; no third-party accounts to create.
-- **You're chaining agent → agent → tool** → invoke another hosted agent, worker, or service by its id through the same one `/v1/capabilities/<id>/invoke` path; each cross-owner hop is billed down the chain automatically.
+- **You're chaining agent → agent → tool** → resolve the exact Unit and Action, then invoke through `/v1/service-units/<unit-id>/actions/<action-id>/invoke`; each cross-owner hop is billed down the chain automatically.
 - **You want to publish an agent / app API / command for others to call** → it enters the searchable catalog, metered per call, with per-app spend caps the user can revoke.
 - **You want the fastest MVP with minimal external setup** → deploy can replace manual auth, database, and hosting wiring for the features its preflight reports available. Do not infer live Stripe/payment availability from this guide.
 
@@ -40,48 +40,55 @@ If none of these fit (a local-only script, no users, no paid calls), you don't n
 
 ## No CLI? HTTP-Only Quick Start
 
-If your runtime cannot install npm packages (CI sandbox, restricted agent runtime), public discovery and account actions are both plain HTTP against `https://api.semesh.net`. **Search, inspect, and a public platform capability quote are public: do not obtain, send, or expose a key for them.** A public platform capability quote is anonymous and read-only: it creates no hold, charge, ledger entry, allowance read, or provider call. Authenticate to quote an agent, worker offer, app endpoint, service unit, non-public target, or any payer-aware or call-chain request. Those restricted quote targets fail closed with `anonymous_quote_target_restricted`; all invoke and account reads also require `Authorization: Bearer $SEMESH_API_KEY`.
+If your runtime cannot install npm packages (CI sandbox, restricted agent runtime), public discovery and account actions are both plain HTTP against `https://api.semesh.net`. **Service Unit search and detail are public: do not obtain, send, or expose a key for them.** A public platform capability quote is anonymous and read-only: it creates no hold, charge, ledger entry, allowance read, or provider call. That platform quote is distinct from the canonical Service Unit Action quote, which is authenticated and zero-effect; Service Unit invocation and observation also require `Authorization: Bearer $SEMESH_API_KEY`.
 
 ```bash
-# 1. Search the public catalog (no key; this is the same discovery index the CLI uses)
-curl "https://api.semesh.net/v1/services/search?q=webpage+to+markdown"
-curl "https://api.semesh.net/v1/services/search?all=true&category=web-knowledge-services"
+# 1. Search the public Unit catalog (no key; this is the same discovery index the CLI uses)
+curl "https://api.semesh.net/v1/service-units/search?q=webpage+to+markdown"
+curl "https://api.semesh.net/v1/service-units/search?limit=50&category=web-knowledge-services"
 
-# 2. Inspect the selected public Unit contract by its exact search-result id
-curl "https://api.semesh.net/v1/services/ecosystem.webpage.to_markdown"
+# 2. If the hit is a Unit, inspect it and choose one advertised Action
+curl "https://api.semesh.net/v1/service-units/<unit-id>"
 
-# 3. Quote a public platform capability — anonymous and read-only
-curl -X POST -H "Content-Type: application/json" \
-  -d '{"capability_id":"ecosystem.webpage.to_markdown","input":{"url":"https://example.com"}}' \
-  "https://api.semesh.net/v1/billing/quote"
+# If the hit is a Group, inspect it here and choose a member Unit; Groups are not callable
+curl "https://api.semesh.net/v1/service-groups/<group-id>"
 
-# 4. Only after choosing an account-required action, provide a key.
+# 3. Provide a key before the authenticated quote/invoke/observe sequence
 export SEMESH_API_KEY="YOUR_API_KEY"
 
-# 5. Invoke — the canonical prefix is /v1/capabilities/ (NOT /v1/tools/)
+# 4. Quote the exact Unit Action; map actions[].ref and runtime_pin from detail into the request
 curl -X POST -H "Authorization: Bearer $SEMESH_API_KEY" -H "Content-Type: application/json" \
-  -d '{"input":{"url":"https://example.com"}}' \
-  "https://api.semesh.net/v1/capabilities/ecosystem.webpage.to_markdown/invoke"
+  --data @quote-request.json \
+  "https://api.semesh.net/v1/service-units/<unit-id>/actions/<action-id>/quote"
 
-# 6. Your balance / ledger (developer account — works with an API key)
-curl -H "Authorization: Bearer $SEMESH_API_KEY" "https://api.semesh.net/v1/credits/balance"
+# 5. Invoke with the same reference, pin, input and confirmed value, plus returned quote fields
+curl -X POST -H "Authorization: Bearer $SEMESH_API_KEY" -H "Content-Type: application/json" \
+  -H "Idempotency-Key: <invoke-attempt-id>" --data @invoke-request.json \
+  "https://api.semesh.net/v1/service-units/<unit-id>/actions/<action-id>/invoke"
+
+# 6. Observe that exact idempotent attempt; do not guess another polling route
+curl -H "Authorization: Bearer $SEMESH_API_KEY" \
+  "https://api.semesh.net/v1/service-units/<unit-id>/actions/<action-id>/invocations/<invoke-attempt-id>"
 
 # 7. Connectivity / key check — free, no Aev, no quota
 curl -H "Authorization: Bearer $SEMESH_API_KEY" "https://api.semesh.net/v1/ping"
 # → {"success":true,"data":{"ok":true,"account_id":"..."}}
 ```
 
-The older authenticated compatibility alias
-`https://api.semesh.net/v1/capabilities/webpage.to_markdown/invoke` may still be accepted for an
-existing client, but it is not canonical for the discover → show → quote → invoke main line. New
-clients must keep the exact search-result id, such as `ecosystem.webpage.to_markdown`, unchanged.
+For the two request files above, map the selected detail's exact `data.actions[].ref` to the request
+field `unit_action_ref`, and its complete `data.runtime_pin` to `catalog_pin`. The quote request also
+carries `input` and `confirmed`; the invoke request repeats those values and adds the returned
+`quote_reference`, plus `quote_receipt` only when the quote returns one. Omitting an optional receipt
+is different from sending an empty string. Older route families may remain supported for existing
+clients, but the official Backend contract target is the Service Unit discover → detail → quote →
+invoke → observe path above. The official canonical Service Unit action paths are `POST /v1/service-units/{unit}/actions/{action}/quote`, `POST /v1/service-units/{unit}/actions/{action}/invoke`, and `GET /v1/service-units/{unit}/actions/{action}/invocations/{invoke_attempt_id}`. This source contract does not prove that a production deployment has finished: before sending a mutation, confirm live discovery advertises the canonical endpoint.
 
 HTTP-only gotchas (each one costs cold agents real time — read them now):
 
-- **Keep the selected catalog id unchanged for the whole journey.** Treat `entrypoints[].id` as an opaque canonical Unit id: copy it verbatim into show, quote, and invoke (for example, `ecosystem.webpage.to_markdown`). Do not shorten or reconstruct it. Older ids, when accepted, are compatibility aliases only and are not the discover → show → quote → invoke main line.
+- **Keep the selected catalog id unchanged for the whole journey.** Treat the search result's top-level `id` as an opaque canonical Unit id: copy it verbatim into detail, quote, invoke, and observe (for example, `ecosystem.webpage.to_markdown`). Do not shorten or reconstruct it. Older ids, when accepted, are compatibility aliases only and are not the discover → detail → quote → invoke → observe main line.
 - **There is no `/v1/whoami`.** Verify your key with `GET /v1/ping` (free; 200 = key works, 401 `invalid_api_key` = fix the key first). `whoami` exists only in the CLI; don't call `/v1/credits/balance` just to test connectivity.
-- **`POST /v1/capabilities/<id>/invoke` is the ONE canonical invoke path for ANY search-result id** — platform capabilities, published dynamic services, **hosted agents** (`agent_…`), and **worker offers** (`offer_…`) all execute through it. Take a search hit's `entrypoints[].id` and POST it verbatim (e.g. `ecosystem.article.summarize`, or a bare `agent_abc` / `offer_xyz`); you do NOT need to know whether it is a capability, agent, or worker, and you do NOT pass a "kind" — the platform resolves it and runs the same callability + billing checks. Don't guess `POST /v1/tools/<id>/invoke` — that exact path 404s; the canonical invoke is `POST /v1/capabilities/<id>/invoke` (`POST /v1/tools/<id>/call` is a compatibility alias only, and `GET /v1/tools/<id>` returns a tool's schema for inspection). A bare **app id** (`app_…`) is the exception: app commands are addressed by a composite `{app_id}/{command_id}` pair, so invoking an app id alone returns `app_command_scope_required` pointing you at `POST /v1/app-commands/{app_id}/{command_id}/invoke`. (`/v1/dynamic-services/<dsvc_id>/operations/<op>/invoke` is only for your own private draft dynamic service; once it is in search, use `/v1/capabilities/`.) Groups are not callable — never POST a group id as an invoke target.
-- **Handle the response by `execution.mode`** — the contract (from `GET /v1/services/<id>` or the tool spec) declares one of three modes so you never have to guess the response shape: `sync` → the result is in the response `data` envelope; `async` → the call returns a job; the tool spec's `wait` block (`GET /v1/tools/<id>` or `semesh tool show <id>`) carries the full poll contract — take the job id from one of `wait.id_paths`, `GET wait.poll_path` until `wait.status_path` reaches a terminal status, then read the result from `wait.result_paths` (`--wait`/`tool events <job-id>` do this for you); `agent` → a hosted-agent run whose output is under `data` and which may stream events. Don't assume one fixed shape across ids; branch on the declared mode and read result locations defensively.
+- **Use the canonical Service Unit journey for each Unit search hit:** `GET /v1/service-units/search` → `GET /v1/service-units/<unit-id>` → `POST /v1/service-units/<unit-id>/actions/<action-id>/quote` → `POST .../invoke` → `GET .../invocations/<invoke-attempt-id>`. Map detail `actions[].ref` to request `unit_action_ref` and `runtime_pin` to `catalog_pin`; preserve both exactly. A Group hit uses `GET /v1/service-groups/<group-id>` only to choose a member Unit and is never quoted or invoked. Older route families are compatibility rails, not the official Service Unit target. Source documentation alone does not prove production rollout; require live discovery/readback before mutation.
+- **Handle the canonical Action envelope:** quote, invoke, and observe return `{success:true,data:{...}}`. Read invoke output from `data.result` and the attempt identity/state from `data.invocation`; for a non-terminal or uncertain attempt, use the canonical observation route and branch on `data.state` plus `data.recovery_action`. Do not apply a legacy direct-capability response shape to this Action transport.
 - **`GET /v1/wallet/balance` is NOT for API keys** — it is the end-user (payer-session) balance and returns 401 `invalid_payer_token` for a bearer key. Your own balance is `/v1/credits/balance`.
 - CLI-only conveniences with no REST equivalent: `doctor`, `tool schema`, deploy (`semesh deploy` orchestrates packaging/upload — deploying requires the CLI). Recipes also have public, read-only REST: `GET /v1/recipes` and `GET /v1/recipes/{topic}`; neither requires a key.
 
@@ -131,31 +138,46 @@ semesh search "upload public agent" --json
 semesh search "local worker compute" --json
 ```
 
-Then inspect the selected service:
+Then inspect the selected Unit and choose an Action from its detail response:
 
 ```bash
-semesh show <service-id> --json
-semesh tool show <tool-id> --json
+semesh show <unit-id> --json
 ```
 
-Use the selected search result's canonical `entrypoints[].id` unchanged across the complete Unit journey. For example:
+Use the selected search result's top-level `id` unchanged across the complete Unit journey. For an
+Action that does not require separate confirmation, the normal call performs the canonical detail →
+unconfirmed quote → invoke → observe flow internally:
 
 ```bash
-semesh show ecosystem.webpage.to_markdown --json
-semesh quote ecosystem.webpage.to_markdown --input '{"url":"https://example.com"}' --json
-semesh call ecosystem.webpage.to_markdown --input '{"url":"https://example.com"}' --json
+semesh show <unit-id> --json
+semesh call <unit-id> --action <action-id> \
+  --input '{"url":"https://example.com"}' --json
 ```
 
-Do not shorten or rebuild a catalog id between commands. Older ids, when accepted, are compatibility aliases only; they are not the canonical main line.
+For an explicit zero-effect Action preview, write the authenticated quote to a file. If that Action
+requires confirmation, show the exact target and effect to the user, stop for confirmation, and then
+invoke from the unchanged quote:
 
-Then quote the exact paid call before invoking. A public platform capability quote through `POST /v1/billing/quote` does not require login or a key and remains read-only. Authenticate to quote an agent, worker offer, app endpoint, service unit, non-public target, or any payer-aware or call-chain request. An unauthenticated request for those targets fails with `anonymous_quote_target_restricted`:
+```bash
+semesh call <unit-id> --action <action-id> \
+  --input '{"url":"https://example.com"}' --quote-only --quote-out ./action.quote.json --json
+semesh call --confirm --from-quote ./action.quote.json --wait --json
+```
+
+Do not shorten or rebuild a catalog id between commands. Older ids, when accepted, are compatibility
+aliases only; they are not the canonical main line.
+
+The separate `semesh quote` command targets the legacy public-platform capability quote at `POST
+/v1/billing/quote`; it does not bind a Service Unit Action, catalog pin, or quote receipt and is not the
+canonical Unit Action quote above. A public platform capability quote does not require login or a key
+and remains read-only. Authenticate to quote an agent, worker offer, app endpoint, service unit, non-public target, or any payer-aware or call-chain request. An unauthenticated request for those targets fails with `anonymous_quote_target_restricted`:
 
 ```bash
 semesh quote web.search --input '{"q":"Semesh"}' --json
 semesh quote image.gpt-image-2 --input '{"prompt":"a glass city at sunrise"}' --json
 ```
 
-A result may carry `availability_reason` (e.g. "missing platform provider configuration" or "requires a user-owned provider connection") — the public CLI won't invoke those until the stated requirement is satisfied. For `web.search` the top web result is at `web.results[0].title` / `.url`. **Successful bodies are NOT normalized — there are exactly two envelope shapes, pick by transport.** A platform-managed capability invoke — both platform-native reads (`web.search`, `web.scrape`) and provider passthroughs (`gov.clinical_trials.search`, `crypto.token.quote`, `seo.serp`, …) — returns the **upstream provider's body verbatim**. Over the **raw HTTP invoke** it sits at the TOP level (NOT wrapped in `{data,success}`) and its shape varies by provider — e.g. `web.search`→`{type,query,web.results[…]}` (Brave), `gov.clinical_trials.search`→`{totalCount,studies[…]}`, `crypto.token.quote`→`{data:{data:{BTC:[…]}}}` (upstream's own `data`), `seo.serp`→`{tasks[0].result[…]}` (DataForSEO). Via the **`semesh` CLI** (`call --json`) that same body is re-wrapped **once** under `data` (CLI envelope `{ok, tool_id, data, meta}`) — so the web-result path is `web.results[0]` over HTTP but `data.web.results[0]` via the CLI. The ONLY uniform envelopes are this CLI wrapper and the **error** envelope (`{"success":false,"error":{…}}`, below); a *successful* HTTP body is never platform-wrapped, so **do not branch on a top-level `success`/`data` key existing** — read the per-op result location from `GET /v1/tools/<id>` → `output.result_paths` and parse defensively.
+A result may carry `availability_reason` (e.g. "missing platform provider configuration" or "requires a user-owned provider connection") — the public CLI won't invoke those until the stated requirement is satisfied. Provider result shapes still vary, so parse `data.result` against the selected Action contract rather than assuming one provider schema. The canonical raw HTTP Unit Action invoke is always platform-wrapped as `{success:true,data:{unit_action_ref,catalog_pin,invocation,result,settlement_reference?}}`; observation is `{success:true,data:{state,invoke_attempt_id,recovery_action,invocation?,result?,settlement_reference?}}`. A Direct Action CLI call with `--json` prints that final observation envelope unchanged; do not expect the legacy `{ok,tool_id,data,meta}` wrapper. Existing direct-capability clients may receive an upstream body without the Unit Action envelope, but that compatibility behavior must never be used to parse the canonical Service Unit path.
 
 ## Call A Tool
 
@@ -167,19 +189,17 @@ semesh call video.veo-3.1 --input '{"prompt":"a glass city at sunrise, slow aeri
 
 Use `--wait` for async jobs. Use `--confirm` only after explicit human confirmation for destructive, high-impact, authorization-expanding, truly irreversible, or explicitly `requires_confirmation` actions that name the exact target and effect; a user asking "delete X" is intent, not confirmation — first show the exact target/effect and stop for confirmation. `semesh tool call` remains a compatible alias, but new agents should teach and use `semesh call <entrypoint-id>`. Always parse JSON defensively. Result URLs or payloads may appear in `data.result`, `data.results`, `data.output`, `output`, `url`, `urls`, or nested arrays/objects.
 
-### Async jobs — poll the *per-model* detail capability (don't guess it)
+### Async Actions — observe the same attempt
 
-Media generation is async: the submit capability returns only a **job id**; the actual result lives behind a separate **detail capability** you poll. The detail id is **self-described by the submit spec**, and you must not invent it:
+For an async Unit Action, keep the original `Idempotency-Key` as the `invoke_attempt_id`; do not invent a per-model detail capability or a second polling identity. The CLI's `--wait` handles this for you. Over raw HTTP, read:
 
-- **Video detail ids are usually per-model** (`video.veo-3.1` → `video.veo-3.1.detail`, `video.sora2-new` → `video.sora2-new.detail`), but some framework-level video tools explicitly share generic detail ids such as `video.hosted.task.detail` or `video.clip.task.detail`.
-- **Images share `image.task.detail`** for image models such as `image.gpt-image-2` and `image.nanobanana2`.
-- **Never guess `video.task.detail`, and never reuse another concrete model's detail id.** Read the advertised detail id every time.
-- **The authoritative poll id is in the submit op's spec at `wait.detail_capability_id` (also `output.next[0].tool_id`).** Read it with `semesh tool show <submit-id>` / `GET /v1/tools/<submit-id>`; the poll input key is **`id`** (not `task_id`). Over raw HTTP, an async submit response also carries `X-Semesh-Poll-Capability` / `X-Semesh-Poll-Input-Key` headers with the same target.
-- **Easiest:** add `--wait` and the CLI polls for you; over HTTP, `POST /v1/capabilities/<submit-id>/invoke?wait=true` blocks server-side and returns the finished result in one call (or `202` + the poll headers if it exceeds the wall-clock).
+`GET /v1/service-units/<unit-id>/actions/<action-id>/invocations/<invoke-attempt-id>`
 
-**Picking an LLM model (`llm.chat`).** `model` defaults to `mistralai/mistral-medium-3-5`, so `{"messages":[...]}` alone works with a vetted non-reasoning instruct model that reliably returns text at `choices[0].message.content` (so JSON/structured-output apps don't get an empty `content` from a reasoning model). Send `model` explicitly only when it is listed by `GET /v1/models`; unknown explicit ids return `model_not_found` with suggestions before any charge or upstream call. Pin a listed model for byte-for-byte determinism. Multimodal recognition models still use `llm.chat`: after search, read `GET /v1/services/{model_id}` or `/v1/models` for `media_input_contract`; do not guess top-level `image_url`/`video_url`. Standard image parts live at `messages[].content[]` as `{type:"image_url",image_url:{url:"https://..."}}`. For video/file recognition, prefer URL-first: if the human gives you a local file, run `semesh files upload ./clip.mp4 --json` with the default temporary upload, then pass the returned `data.url` as `{type:"file",file:{filename:"clip.mp4",file_data:"https://..."}}` (or `file.url`). Do not use `--durable` for model inputs. Semesh converts the URL to provider-ready bytes before the upstream call; tiny data URLs remain accepted, but do not inline large videos manually.
+Branch only on the observation envelope. `data.state:"pending"` means observe again. `data.state:"unknown"` with `data.recovery_action:"observe_invoke_status"` means observe again; with `"retry_with_same_idempotency_key"`, resend the byte-identical invoke body with the same key. `data.state:"terminal"` means stop and read `data.invocation.state` plus optional `data.result`. Never mint a new key or call another Action merely because an attempt is slow.
 
-**Image/video tool ids.** The real image generators are **`image.gpt-image-2`** and **`image.nanobanana2`** (there is no `image.gpt-image-1` — don't use it as a fallback). Video: `video.veo-3.1`, `video.sora2-new`, `video.doubao-seedance-2.0`. Always confirm an id against `GET /v1/tools` (or `semesh search`) before relying on it — a mistyped id 404s with an `error.suggestions` did-you-mean.
+**Picking an LLM model (`llm.chat`).** `model` defaults to `mistralai/mistral-medium-3-5`, so `{"messages":[...]}` alone works with a vetted non-reasoning instruct model that reliably returns text at `choices[0].message.content` (so JSON/structured-output apps don't get an empty `content` from a reasoning model). Send `model` explicitly only when it is listed by `GET /v1/models`; unknown explicit ids return `model_not_found` with suggestions before any charge or upstream call. Pin a listed model for byte-for-byte determinism. Multimodal recognition models still use `llm.chat`: after search, read `GET /v1/service-units/{model_id}` or `/v1/models` for `media_input_contract`; do not guess top-level `image_url`/`video_url`. Standard image parts live at `messages[].content[]` as `{type:"image_url",image_url:{url:"https://..."}}`. For video/file recognition, prefer URL-first: if the human gives you a local file, run `semesh files upload ./clip.mp4 --json` with the default temporary upload, then pass the returned `data.url` as `{type:"file",file:{filename:"clip.mp4",file_data:"https://..."}}` (or `file.url`). Do not use `--durable` for model inputs. Semesh converts the URL to provider-ready bytes before the upstream call; tiny data URLs remain accepted, but do not inline large videos manually.
+
+**Image/video tool ids.** The real image generators are **`image.gpt-image-2`** and **`image.nanobanana2`** (there is no `image.gpt-image-1` — don't use it as a fallback). Video: `video.veo-3.1`, `video.sora2-new`, `video.doubao-seedance-2.0`. Always confirm an id with `semesh search` and `GET /v1/service-units/<unit-id>` before relying on it. A canonical detail miss is HTTP 404 `unit_not_found`; follow `error.fix` and `error.next_actions` to recover.
 
 **Advisories (`X-Semesh-Advisory` response header).** A **successful** call may still carry an `X-Semesh-Advisory` header — a JSON array of `{code, severity, title, fix, docs}` flagging an easily-misused-but-non-fatal pattern you just used. It never changes the body, status, or charge; it's a self-correction signal. **Check it; on `severity:"warn"`, apply the `fix` on your next call.** Stable `code`s you can branch on — e.g. `llm_nondeterministic_auto` (you used an unsupported auto-router model → pin a listed model for reproducible output) and `llm_response_truncated` (`choices[0].finish_reason=="length"` → your answer was cut off by `max_tokens`; raise it, and give reasoning models far more headroom). Safe to ignore, cheap to act on.
 
@@ -201,13 +221,13 @@ semesh aev topup --aev 500 --json    # requests a top-up flow; live availability
 
 ## When A Call Fails (handle these — do not loop blindly)
 
-**Error shape (read this once).** Every failed HTTP call returns `{"success":false,"error":{"code":"…","message":"…"}}` — `error` is an **object**, not a string. Read the human-readable text at **`error.message`** and branch on **`error.code`**; never render `error` itself (stringifying the object yields the literal `"[object Object]"` — a real bug seen in generated apps). Credit-gated 402s may carry `error.topup_url` / `error.required_credits` / `error.available_credits`; some errors carry **`error.fix`** or availability metadata, and some 404s carry `error.suggestions`. Follow the server's `error.code`, `message`, `fix`, and availability; do not invent a funding path. Don't confuse this with a *string* `error` you may see *inside* a success `data` payload (e.g. `data.output.error` on a capped agent run) — that is a different, lower-level field; the top-level HTTP `error` is always the object form.
+**Error shape (read this once).** Every failed HTTP call returns `{"success":false,"error":{"code":"…","message":"…"}}` — `error` is an **object**, not a string. Read the human-readable text at **`error.message`** and branch on **`error.code`**; never render `error` itself (stringifying the object yields the literal `"[object Object]"` — a real bug seen in generated apps). Credit-gated 402s may carry `error.topup_url` / `error.required_credits` / `error.available_credits`; canonical Service Unit errors may carry **`error.fix`**, `error.next_actions`, or availability metadata. Follow the server's `error.code`, `message`, `fix`, next actions, and availability; do not invent a funding path. Don't confuse this with a *string* `error` you may see *inside* a success `data` payload (e.g. `data.output.error` on a capped agent run) — that is a different, lower-level field; the top-level HTTP `error` is always the object form.
 
 - **HTTP 401 `invalid_api_key` / `missing_api_key`** — your key is wrong, expired, or unset. Do NOT retry. Set `SEMESH_API_KEY` (headless) or run `semesh login`, then `semesh whoami --json` to confirm before continuing. Get a key from your dashboard (https://semesh.io).
 - **HTTP 402 `insufficient_credits`** — the admitted call cannot start with the available balance. Read the returned code/message/fix and amounts. Use `topup_url` only when the response includes it and the Legal/provider gates report available; otherwise report the returned remediation or that funding is unavailable. Retry with the same idempotency key only after the server-reported prerequisite is satisfied.
 - **HTTP 402 `credit_limit_exceeded`** — the API key hit its own spend cap; use a key with a higher limit.
 - **HTTP 403 `payer_not_allowed`** — you sent `X-Semesh-Payer` (end-user-pays) but the request's bearer is a normal account/CLI key. `X-Semesh-Payer` only works when the bearer is a **deployed-app runtime key** (`SEMESH_APP_API_KEY`, injected by `semesh deploy`). So you cannot exercise the end-user-pays money path locally with a user key — verify the app's billed success path only after deploy. (The payer *value* must also be a real `__semesh_session`/`__semesh_access` from a logged-in user, never a key.)
-- **An async job did not finish under `--wait`** — read progress with `semesh tool events <job-id> --json`; for deploys use `semesh deploy status <app-id>` and `semesh deploy logs <build-id>`.
+- **A canonical Action did not finish under `--wait`** — continue read-only observation with `semesh call <unit-id> --action <action-id> --observe-attempt <invoke-attempt-id> --json`. A deploy is a separate workflow: use `semesh deploy status <app-id>` and `semesh deploy logs <build-id>` for it.
 - **`doctor` reports a stale CLI** — reinstall `npm install semesh@latest --prefer-online` before continuing.
 - **`search` returns nothing useful** — broaden the query, try `semesh search --all --category <category>`, or read `semesh recipes`.
 
@@ -217,14 +237,14 @@ A transport failure such as HTTP 502 leaves a paid call's outcome unknown. Prese
 
 ```bash
 curl -X POST -H "Authorization: Bearer $SEMESH_API_KEY" -H "Content-Type: application/json" \
-  -H "Idempotency-Key: $(uuidgen)" \
-  -d '{"input":{"q":"Semesh"}}' \
-  "https://api.semesh.net/v1/capabilities/web.search/invoke"
+  -H "Idempotency-Key: <invoke-attempt-id>" \
+  --data @invoke-request.json \
+  "https://api.semesh.net/v1/service-units/<unit-id>/actions/<action-id>/invoke"
 ```
 
 - **Same key + same body** identifies the same logical operation. A timeout, connection loss, HTTP 502, or missing response does **not** prove whether the effect or capture happened. Do not retry blindly and do not mint a new key. Reconcile the same idempotency key / logical operation identity first; if the server supports a retry, resend the exact same body with that same key so you do not create a new logical effect.
 - **Same key + a *different* body** → **HTTP 409 `idempotency_key_conflict`**, fail-closed, **no charge** — use a fresh key for a genuinely new operation.
-- **No key** → every call is a new charge (the default). Reuse one key per logical operation; mint a new key per new operation.
+- **No `Idempotency-Key`** → HTTP 400 `missing_idempotency_key` before invoke, with no effect or charge. Reuse one key per logical operation; mint a new key per genuinely new operation.
 
 **Verify a charge only from trusted capture evidence: a terminal captured ledger entry, or the explicit platform `x-semesh-charged-aev` post-capture response header when present.** Never infer a charge from HTTP success/failure, a provider response body, an approximate quote, a balance delta, or arbitrary `cost` / `amount` / `charged` fields. Async settlement makes a balance delta briefly unreliable. Use `GET /v1/credits/ledger?limit=5` for itemized entries. Match a captured entry by endpoint and operation context, not by string-matching your literal `Idempotency-Key` against the derived ledger id. A fixed/input-priced capture should match its exact quote; a usage-metered capture is the measured amount at or below its hold ceiling. A row or response still marked pending/unknown is not final proof.
 
@@ -341,13 +361,15 @@ revenue. Four concrete steps:
 ```
 Choosing m is a pricing decision: use the owner's specified value; else ask (recommend 1.1); headless with no one to ask → 1.0 (never impose an unapproved markup). An out-of-set value (e.g. 1.05 or 2.0) is **rejected** at deploy, not clamped — use one of the six allowed values. This stamps m on your app's runtime key, so every delegated charge below is `cost × m` with the markup credited to your account.
 
-**2. Charge the end user** — when your SERVER calls a platform service for a logged-in user, forward the user's Semesh session as the `X-Semesh-Payer` header so THEIR wallet pays (not yours):
+**2. Charge the end user** — when your SERVER calls a platform service for a logged-in user, forward the same Semesh session as `X-Semesh-Payer` on quote, invoke, and observe so the quote actor and payer-scoped attempt remain bound to that user:
 ```
-POST {SEMESH_BASE_URL}/v1/capabilities/<id>/invoke      # or /v1/dynamic-services/<id>/operations/<op>/invoke
+POST {SEMESH_BASE_URL}/v1/service-units/<unit-id>/actions/<action-id>/quote
+POST {SEMESH_BASE_URL}/v1/service-units/<unit-id>/actions/<action-id>/invoke
+GET  {SEMESH_BASE_URL}/v1/service-units/<unit-id>/actions/<action-id>/invocations/<invoke-attempt-id>
 Authorization: Bearer {SEMESH_APP_API_KEY}
 X-Semesh-Payer: <the user's __semesh_session cookie>        # prefer __semesh_session (durable, 7-day); __semesh_access (OAuth token) also accepted
 ```
-The platform charges the user `cost × m` and credits you the markup (a platform-default per-app allowance and per-call ceiling are enforced by default; explicit user limits can adjust the cap — see 4). Read the cookie from the incoming request — the auth gate passes `__semesh_*` cookies through to your server. **No header ⇒ your own wallet pays** (use that only for background jobs you fund).
+The platform charges the user `cost × m` and credits you the markup (a platform-default per-app allowance and per-call ceiling are enforced by default; explicit user limits can adjust the cap — see 4). Read the cookie from the incoming request — the auth gate passes `__semesh_*` cookies through to your server. Do not use the general quick start without adding this same payer header to all three requests. **No header ⇒ your own wallet pays** (use that only for background jobs you fund).
 
 **Preflight the end-user-pays path before real users.** After deploying an auth-enabled app, the app OWNER can mint a short-lived self-test payer token:
 ```
@@ -357,7 +379,7 @@ Authorization: Bearer {owner API key}
 Use the returned `data.token` exactly like a user session in `X-Semesh-Payer`, alongside the deployed app's runtime key (`Authorization: Bearer {SEMESH_APP_API_KEY}`). The call exercises the same delegated payer rail and spends the owner's own wallet, so you can verify quote → hold/capture → ledger before onboarding a customer. Every resulting wallet/settlement/request-log row is tagged `test_payer=true`; operator revenue views exclude those self-test rows, but your daily spend caps still count them because they are real spend. Never ship this token as a user credential; mint a fresh one only for owner self-tests.
 
 **3. Cost transparency — REQUIRED whenever your app spends the user's Aev.** Never spend a logged-in user's Aev silently. Two obligations, both enforced as product policy:
-- **Estimate BEFORE.** Show the user an estimated cost in the UI *before* the action runs. Use `semesh quote <entrypoint-id> --input '{...}' --json` as the canonical CLI source; for HTTP-only agents use **`POST /v1/billing/quote`** — see the quote note below. For cloud workers, quote the offer or compute `credits_per_second × expected_seconds`, then multiply by your markup `m`. Display it as "≈ N Aev" (mark it an estimate; the real charge may be metered).
+- **Estimate BEFORE.** Show the user an estimated cost in the UI *before* the action runs. For a canonical Unit Action, use `semesh call <unit-id> --action <action-id> --input '{...}' --quote-only --quote-out ./action.quote.json --json`; for HTTP-only agents use the selected Action's **`POST /v1/service-units/<unit-id>/actions/<action-id>/quote`** contract from the quick start. The separate `semesh quote` command is the legacy public-platform capability preview, not the canonical Action quote. For cloud workers, quote the offer or compute `credits_per_second × expected_seconds`, then multiply by your markup `m`. Display it as "≈ N Aev" (mark it an estimate; the real charge may be metered).
 - **Actual AFTER.** Show the exact amount actually captured once the action completes. For a **synchronous capability invoke**, read **`X-Semesh-Charged-Aev`** when present (the metered path may also add `X-Semesh-Base-Cost-Aev` + `X-Semesh-Markup-Aev`); do NOT infer the bill from the provider's raw `usage.cost`. A metered cloud-worker job reports `GET /v1/worker-jobs/{id}` → `data.metadata.settlement_cost_credits`. Streaming responses cannot carry a post-stream capture header, so verify a terminal captured ledger row for the endpoint: fixed/input-priced amounts match the exact quote, while metered amounts follow actual usage at or below the hold ceiling. Never use a balance delta, pending row, or provider body as final proof.
 - **Viewing entry.** Give the user a link to their full Aev spend — their Semesh account/wallet (where every charge across all apps is itemized) — so they can audit what your app cost them. `GET /v1/wallet/balance` (with `X-Semesh-Payer`) is the live balance; link the user to the Semesh wallet page for history.
 
@@ -372,7 +394,7 @@ Unlike `/v1/wallet/balance` (which requires a logged-in payer session), these `a
 
 **Billing errors to handle:** `app_allowance_required` (403) / `app_per_call_ceiling` (403) / `app_allowance_exceeded` (402) — user must set or raise the allowance, lower the call size, or rely on the default layer after removing an explicit cap; `insufficient_credits` (402 — follow the returned fix/availability; do not assume top-up is enabled); `invalid_payer_token` (401, session expired → user re-logs in).
 
-**Quote before charging (recommended for every paid call):** CLI: `semesh quote <entrypoint-id> --input '{...}' --json`. HTTP: `POST /v1/billing/quote` with `{"capability_id":"..."}` or `{"agent_id":"..."}` or `{"app_id":"...","endpoint_id":"..."}` → `{base_cost_credits, markup_bps, multiplier, total_credits, markup_deduped, chain:{depth,max_depth}, payer:{delegated, allowance?}}`. Read-only (no hold). Distinguish quote fields carefully: a **fixed or input-priced** unit returns the caller's **exact price**; a hidden routed-provider choice does not change that service-unit charge. A **representative floor** or reference estimate helps discovery but is neither a cap nor a final quote. For usage-metered entries, **`hold_ceiling_credits`** is the maximum pre-authorization and final capture follows **measured usage** / actual usage capture without exceeding that hold ceiling. Quote/preflight informs cost and availability; it is not a second confirmation. Show the applicable exact price, estimate, or ceiling before the action, then show the actual ledger/header charge after completion.
+**Quote before charging (recommended for every paid call):** for a canonical Unit Action, use `semesh call <unit-id> --action <action-id> --input '{...}' --quote-only --quote-out ./action.quote.json --json`; over raw HTTP, use `POST /v1/service-units/<unit-id>/actions/<action-id>/quote` with the detail-derived `unit_action_ref`, `catalog_pin`, exact `input`, and `confirmed` value. The separate `semesh quote <entrypoint-id> --input '{...}' --json` command is only the legacy public-platform capability quote described above. A quote is read-only (no hold). Distinguish quote fields carefully: a **fixed or input-priced** unit returns the caller's **exact price**; a hidden routed-provider choice does not change that service-unit charge. A **representative floor** or reference estimate helps discovery but is neither a cap nor a final quote. For usage-metered entries, **`hold_ceiling_credits`** is the maximum pre-authorization and final capture follows **measured usage** / actual usage capture without exceeding that hold ceiling. Quote/preflight informs cost and availability; it is not a second confirmation. Show the applicable exact price, estimate, or ceiling before the action, then show the actual ledger/header charge after completion.
 
 **Mandatory:** any deployed unit that consumes paid platform services MUST declare billing — `semesh apps doctor` warns otherwise — else the cost silently falls on YOUR wallet.
 
