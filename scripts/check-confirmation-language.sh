@@ -12,7 +12,8 @@ cd "$root"
 policy='A direct user request authorizes ordinary paid invocation, deploy, and mechanical publish without a duplicate confirmation.'
 quote_boundary='Quote/preflight informs cost and availability; it is not a second confirmation.'
 confirmation_boundary='Ask for a separate confirmation only for destructive, high-impact, authorization-expanding, truly irreversible, or explicitly `requires_confirmation` actions.'
-canonical_invoke='The canonical HTTP invoke path is `POST /v1/capabilities/{id}/invoke`; `POST /v1/tools/{id}/call` is a compatibility alias only.'
+canonical_service_unit_actions='The official canonical Service Unit action paths are `POST /v1/service-units/{unit}/actions/{action}/quote`, `POST /v1/service-units/{unit}/actions/{action}/invoke`, and `GET /v1/service-units/{unit}/actions/{action}/invocations/{invoke_attempt_id}`.'
+legacy_capability_canonical='The canonical HTTP invoke path is `POST /v1/capabilities/{id}/invoke`; `POST /v1/tools/{id}/call` is a compatibility alias only.'
 automatic_publication='Passing mechanical protocol checks publish and become discoverable automatically; there is no default human approval queue.'
 card_containment='Aev is the platform accounting unit. Card top-up is contained and Legal remains unverified; do not claim card funding is available.'
 
@@ -60,6 +61,11 @@ contract_projections=(
 )
 
 core_contract_projections=(
+  agent.md
+  llms.txt
+)
+
+canonical_service_unit_projections=(
   agent.md
   llms.txt
 )
@@ -170,6 +176,13 @@ text_has_forbidden_policy() {
   fi
 
   return 1
+}
+
+# Returns 0 only for the retired claim that promotes direct capability/tool
+# routes to the canonical Service Unit contract.
+text_has_legacy_capability_canonical_claim() {
+  local text="$1"
+  printf '%s\n' "$text" | grep -Fq -- "$legacy_capability_canonical"
 }
 
 # Current production has no durable user-visible teardown_pending state machine.
@@ -338,6 +351,15 @@ run_self_tests() {
   assert_allows 'anonymous search show only' \
     'use anonymous semesh search / show and other public read-only GET surfaces first — they work without login'
 
+  if ! text_has_legacy_capability_canonical_claim "$legacy_capability_canonical"; then
+    printf 'self-test FAIL (expected reject): legacy capability-canonical claim\n' >&2
+    st_failed=1
+  fi
+  if text_has_legacy_capability_canonical_claim "$canonical_service_unit_actions"; then
+    printf 'self-test FAIL (expected allow): canonical Service Unit action paths\n' >&2
+    st_failed=1
+  fi
+
   if ! text_has_false_cleanup_claim 'Delete queues provider cleanup and every deployment remains teardown_pending until cleanup is confirmed.'; then
     printf 'self-test FAIL (expected reject): false durable cleanup projection\n' >&2
     st_failed=1
@@ -402,9 +424,17 @@ for file in "${journey_projections[@]}"; do
 done
 
 for file in "${contract_projections[@]}"; do
-  require_text "$file" "$canonical_invoke"
   require_text "$file" "$automatic_publication"
   require_text "$file" "$card_containment"
+done
+
+for file in "${canonical_service_unit_projections[@]}"; do
+  require_text "$file" "$canonical_service_unit_actions"
+  if text_has_legacy_capability_canonical_claim "$(<"$file")"; then
+    printf 'legacy capability-canonical wording remains in %s: %s\n' \
+      "$file" "$legacy_capability_canonical" >&2
+    failed=1
+  fi
 done
 
 for file in "${core_contract_projections[@]}"; do
