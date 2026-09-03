@@ -1,16 +1,15 @@
 {
   "name": "semesh",
-  "displayName": "Semesh",
   "version": "0.1.0",
-  "description": "Search and invoke the Semesh capability catalog, inspect deployment readiness, and observe existing deployments. Production source deployment is currently unavailable and fails closed before release.",
+  "description": "Search Semesh Service Units, invoke their nested Actions, inspect deployment readiness, and observe existing deployments. Production source deployment is currently unavailable and fails closed before release.",
   "author": {
     "name": "StructureIntelligence Inc.",
-    "url": "https://semesh.io"
+    "email": "support@semesh.io"
   },
   "homepage": "https://semesh.io",
   "repository": "https://github.com/StructureIntelligence/semesh",
   "license": "Apache-2.0",
-  "category": "Payments",
+  "logo": "logo.png",
   "keywords": ["semesh", "deploy", "billing", "payments", "end-user-pays", "mcp", "agent"],
   "mcpServers": "./mcp.json",
   "rules": "./rules",

@@ -1,10 +1,10 @@
 # Semesh — Cursor plugin
 
-Discover and invoke Semesh capabilities, inspect deployment readiness, and observe existing
+Discover Semesh Service Units, invoke their nested Actions, inspect deployment readiness, and observe existing
 deployments. Production deployment authorization is currently unavailable: `app_deployments.create`
 is disabled and source deploy fails closed with `deployment_authorization_unavailable`. The plugin bundles the Semesh MCP server so
-Cursor can search and invoke the full capability catalog (web search/scrape, LLMs, image/video,
-managed SQL, hosted agents) — every call metered, with a cost quote up front.
+Cursor can search the Service Unit catalog and invoke nested Actions (web search/scrape, models,
+image/video, managed SQL, hosted agents) with an exact quote before each paid invocation.
 
 ## What this plugin ships
 
@@ -30,7 +30,7 @@ semesh login        # browser approval — or set SEMESH_API_KEY=YOUR_API_KEY fo
 ---
 
 > **Maintainer note (validate before submitting):** Cursor's `.cursor-plugin/plugin.json` and
-> `marketplace.json` schemas evolve. Confirm field names (`mcpServers`/`rules`/`skills`, `owner.email`,
-> `category`) against the current docs at https://cursor.com/docs before submitting at
-> https://cursor.com/marketplace/publish. `category: "Payments"` matches a category visible in the
-> in-app marketplace; adjust if Cursor renames it.
+> `marketplace.json` schemas evolve. Confirm them against the current reference at
+> https://cursor.com/docs/reference/plugins before submitting at https://cursor.com/marketplace/publish.
+> `category` belongs to a marketplace plugin entry, while this per-plugin manifest carries the
+> component paths and author metadata documented for `.cursor-plugin/plugin.json`.
