@@ -1,7 +1,7 @@
 export const metadata = {
   title: "Snippet Vault — built & shipped by an agent on Semesh",
   description:
-    "A tiny full-stack demo: Semesh login, a managed database, and one metered capability call.",
+    "A tiny full-stack demo: Semesh login, a managed database, and one quoted canonical Model Unit Action.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

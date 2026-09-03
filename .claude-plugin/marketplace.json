@@ -5,7 +5,7 @@
     "url": "https://semesh.io"
   },
   "metadata": {
-    "description": "Official Semesh plugins for Claude Code — call the capability catalog over MCP and inspect deployment readiness; new source deployment is currently unavailable.",
+    "description": "Official Semesh plugins for Claude Code — discover Service Units and invoke nested Actions over MCP, and inspect deployment readiness; new source deployment is currently unavailable.",
     "version": "0.1.0"
   },
   "plugins": [

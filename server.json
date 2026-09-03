@@ -1,19 +1,19 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.semesh/cli",
-  "description": "Discover Semesh capabilities and inspect app deployment readiness; new source deployment is currently unavailable and fails closed.",
+  "description": "Discover Semesh Service Units and nested Actions; inspect deployment readiness.",
   "repository": {
     "url": "https://github.com/StructureIntelligence/semesh",
     "source": "github"
   },
-  "version": "0.1.95",
+  "version": "0.1.96",
   "websiteUrl": "https://semesh.io",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "semesh",
-      "version": "0.1.95",
+      "version": "0.1.96",
       "transport": {
         "type": "stdio"
       },

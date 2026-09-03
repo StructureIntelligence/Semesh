@@ -1,156 +1,168 @@
-// The one METERED capability call in this demo.
-//
-// POST /api/polish { body } -> { polished }
-//
-// This forwards the snippet text to a Semesh capability with an authenticated
-// delegated payer and one stable logical operation identity. Provider output and
-// HTTP success are useful execution evidence, but never settlement authority.
+// The demo's single paid flow is deliberately two-phase:
+//   prepare — anonymous public Search, token-pinned Detail, authenticated effect-zero quote
+//   invoke  — the browser persisted the exact action/catalog/model pins and request + replay key
+//   observe — after invoke returns an id, use only invocation_id for observation/receipt
+// There is no legacy capability path and no local execution fallback.
 
 import {
-  callCapability,
   extractPayerToken,
+  invokePreparedPolishAction,
   isValidIdempotencyKey,
+  observePreparedPolishAction,
+  prepareCanonicalPolishAction,
 } from "@/lib/semesh";
+import { projectCanonicalModelResult } from "@/lib/polish-operation.mjs";
 
 export const dynamic = "force-dynamic";
 
-// TODO: set this to the capability/tool ID you want to meter. Semesh exposes
-// a catalog of capabilities; pick the one that matches (e.g. a text-rewrite /
-// LLM helper) and put its ID here or in the SEMESH_POLISH_CAPABILITY env var.
-// The agent guide at https://semesh.io/agent.md lists available capability
-// IDs and their exact input contracts — confirm the input shape there before
-// going live. Until you set this, the route returns a local fallback so the demo
-// still runs end-to-end without charging anyone.
-const POLISH_CAPABILITY = process.env.SEMESH_POLISH_CAPABILITY || "";
+function errorResponse(
+  status: number,
+  code: string,
+  message: string,
+  extra: Record<string, unknown> = {}
+) {
+  return Response.json({ error: { code, message }, ...extra }, { status });
+}
 
 export async function POST(req: Request) {
-  // Never omit X-Semesh-Payer: doing so would silently charge the app owner. Authenticate before
-  // parsing operation input so every request without a delegated session has the same 401 contract.
   const payerToken = extractPayerToken(req);
   if (!payerToken) {
     return Response.json(
       {
         error: {
           code: "login_required",
-          message: "Sign in with Semesh before starting a paid polish operation.",
+          message: "Sign in with Semesh before preparing or invoking a paid polish Action.",
         },
+        effect_started: false,
       },
       { status: 401 }
     );
   }
 
-  const idempotencyKey = (req.headers.get("Idempotency-Key") || "").trim();
-  if (!isValidIdempotencyKey(idempotencyKey)) {
-    return Response.json(
-      {
-        error: {
-          code: "idempotency_key_required",
-          message: "Send one stable Idempotency-Key per logical polish operation.",
-        },
-      },
-      { status: 400 }
-    );
-  }
-
-  let parsed: { body?: string };
+  let payload: unknown;
   try {
-    parsed = await req.json();
+    payload = await req.json();
   } catch {
-    return Response.json({ error: "invalid JSON" }, { status: 400 });
-  }
-  const text = (parsed.body || "").trim();
-  if (!text) {
-    return Response.json({ error: "body is required" }, { status: 400 });
-  }
-  if (text.length > 10000) {
-    return Response.json({ error: "body exceeds 10000 characters" }, { status: 413 });
-  }
-
-  // No capability configured yet -> safe local fallback (no charge).
-  if (!POLISH_CAPABILITY) {
-    return Response.json({
-      polished: localTidy(text),
-      settlement_status: "not_applicable",
-      captured_aev: null,
-      idempotency_key: idempotencyKey,
-      note: "Local fallback completed without a paid capability operation.",
+    return errorResponse(400, "invalid_json", "The request body must be JSON.", {
+      effect_started: false,
     });
   }
 
-  try {
-    // NOTE: confirm the exact `input` field names for your chosen capability in
-    // https://semesh.io/agent.md — they vary per tool.
-    const result = await callCapability<{
-      output?: string;
-      text?: string;
-      data?: { output?: string; text?: string };
-    }>(
-      POLISH_CAPABILITY,
-      { text, instruction: "Tidy and clarify this snippet; keep its meaning." },
-      { payerToken, idempotencyKey }
+  const idempotencyKey = (req.headers.get("Idempotency-Key") || "").trim();
+  if (!isValidIdempotencyKey(idempotencyKey)) {
+    return errorResponse(
+      400,
+      "idempotency_key_required",
+      "Send one stable Idempotency-Key for this logical polish request.",
+      { effect_started: false }
     );
-    if (!result.ok) {
-      const message = result.settlement_status === "captured"
-        ? "The provider result was unavailable, but trusted platform evidence reports capture. Inspect this operation before retrying; never start a fresh key."
-        : "The provider result was unavailable and settlement is unknown. Retry only the exact same input and Idempotency-Key, or inspect this operation's platform record.";
-      return Response.json(
-        {
-          error: { code: "capability_failed", message },
-          settlement_status: result.settlement_status,
-          captured_aev: result.captured_aev,
-          idempotency_key: idempotencyKey,
-          recovery: {
-            action: "retry_same_operation",
-            message: "Resend the exact same input and Idempotency-Key; never create a fresh key for an uncertain outcome.",
-          },
-        },
-        { status: result.status >= 400 && result.status <= 599 ? result.status : 502 }
-      );
-    }
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return errorResponse(400, "invalid_request", "A canonical polish request object is required.", {
+      effect_started: false,
+    });
+  }
+  const request = payload as {
+    mode?: unknown;
+    body?: unknown;
+    prepared?: unknown;
+    invocation_id?: unknown;
+  };
 
-    const payload = result.payload || {};
-    const data = payload.data || payload;
-    const polished =
-      (typeof data.output === "string" && data.output) ||
-      (typeof data.text === "string" && data.text) ||
-      JSON.stringify(data);
+  if (request.mode === "prepare") {
+    const text = typeof request.body === "string" ? request.body : "";
+    const result = await prepareCanonicalPolishAction(text, { payerToken });
+    if (result.ok === false) {
+      return errorResponse(result.status, result.code, result.message, {
+        effect_started: false,
+        idempotency_key: idempotencyKey,
+      });
+    }
     return Response.json({
-      polished,
-      settlement_status: result.settlement_status,
-      captured_aev: result.captured_aev,
+      prepared: result.prepared,
+      effect_started: false,
       idempotency_key: idempotencyKey,
-      recovery: result.settlement_status === "unknown"
+    });
+  }
+
+  if (request.mode !== "invoke" && request.mode !== "observe") {
+    return errorResponse(400, "invalid_mode", "mode must be prepare, invoke, or observe.", {
+      effect_started: false,
+      idempotency_key: idempotencyKey,
+    });
+  }
+
+  const result = request.mode === "observe"
+      ? await observePreparedPolishAction(request.prepared, {
+        payerToken,
+        invocationId: typeof request.invocation_id === "string" ? request.invocation_id : "",
+        idempotencyKey,
+      })
+    : await invokePreparedPolishAction(request.prepared, {
+        payerToken,
+        idempotencyKey,
+      });
+  if (result.ok === false) {
+    return errorResponse(result.status, result.code, result.message, {
+      effect_started: result.effect_started,
+      idempotency_key: idempotencyKey,
+      ...(result.invocation_id ? { invocation_id: result.invocation_id } : {}),
+      recovery: result.effect_started
         ? {
-            action: "retry_same_operation",
-            message: "Output is preserved. Resend the exact same input and Idempotency-Key, or inspect this operation's platform record.",
+            action: "retry_same_request",
+            message:
+              "Reuse the exact persisted request and Idempotency-Key. Observe only a returned invocation_id; never use the key as an observation id.",
           }
         : null,
     });
-  } catch {
-    return Response.json(
+  }
+
+  const canonicalResult = result.state === "succeeded"
+    ? projectCanonicalModelResult(result.result)
+    : null;
+  const polished = canonicalResult?.message.content ?? null;
+  if (result.state === "succeeded" && polished === null) {
+    return errorResponse(
+      502,
+      "invalid_action_result",
+      "The terminal Model result did not match its strict assistant message and usage schema.",
       {
-        error: {
-          code: "capability_outcome_unknown",
-          message: "Network/provider outcome is unknown. Retry only the exact same input and Idempotency-Key, or inspect this operation's platform record.",
-        },
-        settlement_status: "unknown",
-        captured_aev: null,
+        effect_started: true,
         idempotency_key: idempotencyKey,
+        invocation_id: result.invocation_id,
+        settlement_status: result.settlement_status,
+        captured_aev_atoms: result.captured_aev_atoms,
+        released_aev_atoms: result.released_aev_atoms,
+        receipt: result.receipt,
         recovery: {
-          action: "retry_same_operation",
-          message: "Resend the exact same input and Idempotency-Key; never create a fresh key for an uncertain outcome.",
+          action: "inspect_invocation",
+          message: "Inspect this invocation_id; do not create a replacement request.",
         },
-      },
-      { status: 502 }
+      }
     );
   }
-}
 
-// Trivial offline cleanup so the template is runnable before a capability is wired.
-function localTidy(text: string): string {
-  return text
-    .replace(/[ \t]+/g, " ")
-    .replace(/\s*\n\s*/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return Response.json(
+    {
+      invocation_id: result.invocation_id,
+      state: result.state,
+      ...(polished === null ? {} : { polished }),
+      ...(canonicalResult === null ? {} : { usage: canonicalResult.usage }),
+      settlement_status: result.settlement_status,
+      captured_aev_atoms: result.captured_aev_atoms,
+      released_aev_atoms: result.released_aev_atoms,
+      receipt: result.receipt,
+      idempotency_key: idempotencyKey,
+      effect_started: true,
+      recovery:
+        result.state === "succeeded" && result.receipt
+          ? null
+          : {
+              action: "retry_same_request",
+              message:
+                "Reuse this exact persisted request and Idempotency-Key; the returned invocation_id remains the observation identity.",
+            },
+    },
+    { status: result.status }
+  );
 }

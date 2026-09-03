@@ -2,7 +2,7 @@
   "name": "semesh",
   "displayName": "Semesh",
   "version": "0.1.0",
-  "description": "Search and invoke the Semesh capability catalog, inspect deployment readiness, and observe existing deployments. Production source deployment is currently unavailable and fails closed before release.",
+  "description": "Search Semesh Service Units, invoke their nested Actions, inspect deployment readiness, and observe existing deployments. Production source deployment is currently unavailable and fails closed before release.",
   "author": {
     "name": "StructureIntelligence Inc.",
     "url": "https://semesh.io"

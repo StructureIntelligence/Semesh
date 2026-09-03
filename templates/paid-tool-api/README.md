@@ -1,62 +1,103 @@
 # paid-tool-api
 
-Sell one API endpoint, metered per call — **admit user-paid calls without building a second billing system.** Semesh handles login and the authoritative wallet/ledger workflow; your endpoint only reports captured money when the platform returns explicit post-capture evidence.
+A payer-bound summarization API backed by one nested Action in Semesh’s single public Model Service
+Unit. DeepSeek is a versioned `model_choice_pin` beside canonical input, never an input field, Unit,
+Action, provider, or alternate execution identity.
 
-This starter exposes a single paid endpoint (`POST /api/tool`, a text summarizer) that delegates payment to the **logged-in caller's** Semesh wallet. A useful provider result is not itself proof of capture: the response stays `settlement_status: "unknown"` unless the platform returns its trusted `x-semesh-charged-aev` header.
+This starter implements the target contract and requires live canonical readback. If a target route
+currently returns `404`, non-JSON, incomplete identity, or a nonterminal/malformed receipt, it stops.
+It never changes protocols or guesses another ID.
 
-> **Aev** is Semesh prepaid credit: **1 USD = 100 Aev**. Funding options are shown only when the live platform reports them available; this template does not assume card/Legal/provider availability.
+> 1 Aev = 100000000 Aev atoms. Wire atom values are JSON integers; this JavaScript starter accepts
+> only non-negative `Number.isSafeInteger` values and rejects strings or unsafe rounded numbers.
+> Funding and payouts remain Legal/provider-gated.
 
-## Quickstart
+## Run and check deployment readiness
 
-```bash
+```sh
+cp .env.example .env
+npm test
+npm start
 npm i -g semesh
-git clone <this repo>
 semesh login
-semesh tool show app_deployments.create --json
 semesh deploy preflight . --full-stack --json
 ```
 
-Production deployment authorization is currently unavailable: `app_deployments.create` is disabled and source deploy fails closed with `deployment_authorization_unavailable` before upload, build, payment, publication, or a live URL. When authorization becomes available and both checks allow it, the intended command is `semesh deploy . --full-stack --wait --json`; a successful authorized deployment injects the app runtime key and base URL.
+`app_deployments.create` is the currently unavailable Platform Action for source deployment; it is
+never a Service Unit or nested Unit Action. This target-state template shows only its read-only
+preflight. A current `deployment_authorization_unavailable` result is an
+effect-zero denial before upload/build/payment/publication, not a successful deployment or queue.
 
-## How a caller hits the paid endpoint
+## Two-phase caller API
 
-1. The caller signs in once at `/__semesh/login` (the platform auth gate; sets a durable `__semesh_session` cookie).
-2. They POST to your endpoint. The payer session requests admission against **their** Aev wallet — not yours:
+The app requires one stable replay key and persists the quote-derived invoke bytes before any effect:
 
-```bash
-curl -X POST https://YOUR-APP.run.semesh.io/api/tool \
-  -H "Authorization: Bearer <your-semesh-session-token>" \
-  -H "Idempotency-Key: tool:<one-stable-operation-id>" \
+```sh
+# 1. Effect-zero preparation. Persist the response's `prepared` object exactly.
+curl -X POST https://YOUR-APP.example/api/tool/quote \
+  -H "Authorization: Bearer <caller-session>" \
+  -H "Idempotency-Key: tool:<stable-request-key>" \
   -H "Content-Type: application/json" \
-  -d '{"text":"Long article here...","style":"bullets"}'
+  -d '{"text":"Long article...","style":"bullets"}'
+
+# 2. Invoke with that unchanged object and the same key.
+curl -X POST https://YOUR-APP.example/api/tool/invoke \
+  -H "Authorization: Bearer <same-caller-session>" \
+  -H "Idempotency-Key: tool:<same-stable-request-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"style":"bullets","prepared":<exact-prepared-object>}'
 ```
 
-```json
-{ "ok": true, "summary": "...", "style": "bullets", "captured_aev": 6, "settlement_status": "captured", "idempotency_key": "tool:...", "currency": "aev" }
+`/api/tool/quote` performs anonymous public Search, anonymous token-pinned Unit detail, and an
+authenticated payer-bound Action quote. It requires exactly one Model Unit result, one exact
+detail-derived `UnitActionRef`, the detail’s exact two-key `catalog`, and an Action explicitly marked
+callable, available, and `effect.requires_confirmation=false`. The Action schemas must require
+an exact closed draft-2020-12 messages-only input: required `[messages]`, a non-empty array of closed
+`[role,content]` objects, role enum `[system,user,assistant]`, and non-empty content. The Action’s
+`model_choices[]` must contain exactly one configured selectable, non-callable, Group-free entry
+whose `ref` is `{model_id:"deepseek-v3",model_revision:<advertised-revision>}` and whose `targets[]`
+places that same ref under the selected `UnitActionRef`; the opaque revision is bounded to 512 UTF-8
+bytes. Its output schema is the exact closed chat
+schema: required `[message,usage]`; message required `[role,content]` with role
+`{type:string,enum:[assistant]}` and non-empty string content; usage required `[total_tokens]` with
+integer minimum zero; top/message/usage each use `additionalProperties:false`. Its quote body
+carries the sibling exact `model_choice_pin`, messages-only canonical input, a safe-integer Aev-atom budget, and an RFC3339 deadline. The response must
+echo the pins, controls, and exact input, bind it to `input_digest`, and supply exact quote evidence:
+kind, authorization, reference/receipt, and lowercase SHA-256 input/price/policy/effect digests.
+
+The returned `prepared.invoke_body` is the canonical upstream invoke body, already containing the
+exact `unit_action_ref`, `catalog`, `quote_reference`, same input, `confirmed_effect_digest`, and
+deadline, plus the same sibling `model_choice_pin`. `/api/tool/invoke` forwards those exact bytes,
+and its response plus every observation must preserve the quote-bound `input_digest`. An uncertain
+retry resends the same bytes and key only while no Invocation ID is known. After an ID is known,
+`/api/tool/observe` performs only the nested observation and global receipt GETs.
+
+After invoke, the server reads the returned top-level `invocation_id`, observes that exact Invocation,
+then gets `/v1/invocations/{invocation_id}/receipt`. The replay key is request identity;
+`invocation_id` is observation identity, and the two must not be equal. Same-key, byte-identical replay
+must return the same Invocation, result, receipt, and settlement reference with no extra effect,
+capture, or owner grant. Quote, invoke response, observation, terminal receipt, returned app result,
+and replay must all bind the same `model_choice_pin`; the strict nested Action `result` stays the
+advertised `message` plus `usage` object and never carries an injected choice field.
+
+## Settlement truth
+
+Only conserved atoms in the terminal canonical receipt establish money state:
+
+```text
+held_aev_atoms = captured_aev_atoms + released_aev_atoms
 ```
 
-The deployed app also serves a small docs/landing page (`public/index.html`) with a "try it" box.
+The receipt uses top-level terminal state, safe-integer atom fields, request key, Invocation ID,
+UnitActionRef, Catalog, exact model choice pin, quote/settlement references, and all four quote digests. Held
+atoms must equal the quote authorization. A successful exact-price delivery has a terminal receipt
+that captures the exact amount; a definite failure captures zero and fully releases the hold. Only canonical
+`result.message.content` plus validated usage is read; a provider-shaped result, HTTP status,
+response header, balance delta, or fields named `cost`, `amount`, or `charged` are not settlement
+authority.
 
-## What you get
-
-- **Login** — Semesh OAuth, zero auth code. The auth gate (`/__semesh/login`) handles sign-in and sets the payer session.
-- **Usage billing** — `/api/tool` forwards the logged-in user's delegated payer session and one stable idempotency key. Your margin is the `billing.markup` field in `semesh.json` (default `1.3`).
-- **Settlement truth** — only the explicit platform `x-semesh-charged-aev` post-capture header is rendered as captured, including on a non-2xx response. Missing evidence remains `unknown`; use **Retry same operation** to resend the exact same input and `Idempotency-Key`, or inspect that operation's platform record. Never invent a fresh key for an uncertain outcome.
-- **Funding and payouts** — availability remains platform- and Legal-gated. Do not claim a card funding or payout path until the live response says it is available.
-
-### How the billing wiring works (so you can change the tool safely)
-
-`server.js` authenticates to Semesh with the injected `SEMESH_APP_API_KEY`, forwards the caller's session as `X-Semesh-Payer`, and forwards a stable `Idempotency-Key`. If the payer is missing, the route returns `401` rather than falling back to the developer wallet. Keep that wiring and replace only the tool's input/prompt. Provider body fields such as `cost`, `amount`, or `charged` are untrusted capability output and must never be treated as settlement evidence.
-
-## Make it yours
-
-- Edit the body of `POST /api/tool` in `server.js`.
-- To resell a different Semesh capability or cloud-worker offer, change `CAPABILITY` (env `TOOL_CAPABILITY_ID`) and set the invoke **input** to that capability's documented schema — see https://semesh.io/agent.md. Don't guess the request body.
-- Tune your margin via `stack.billing.markup` in `semesh.json`.
-
-## The badge is optional
-
-`public/index.html` ends with a small, clearly-commented "Powered by Semesh" footer. It's in your code — delete that `<footer>` block to remove it.
+Set the maximum admitted quote through `SEMESH_BUDGET_CEILING_AEV_ATOMS`, and change markup in
+`semesh.json`. Do not build a second wallet or ledger. The footer in `public/index.html` is optional.
 
 ---
 

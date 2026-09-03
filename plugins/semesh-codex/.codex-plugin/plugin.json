@@ -8,15 +8,15 @@
     "displayName": "Semesh",
     "developerName": "StructureIntelligence Inc.",
     "category": "Developer Tools",
-    "shortDescription": "Discover capabilities and inspect deployment readiness; new source deployment is unavailable.",
-    "longDescription": "Semesh exposes a capability catalog over MCP/CLI and the intended login, managed-data, and usage-billing deployment contract. Production deployment authorization is currently unavailable: app_deployments.create is disabled and source deploy fails closed with deployment_authorization_unavailable before upload, build, payment, publication, or a live URL. Existing deployment records can still be observed.",
+    "shortDescription": "Discover Service Unit Actions and inspect deployment readiness; new source deployment is unavailable.",
+    "longDescription": "Semesh exposes a Service Unit catalog with nested Actions over MCP/CLI and the intended login, managed-data, and usage-billing deployment contract. Production deployment authorization is currently unavailable: the deployment Platform Action is disabled and source deploy fails closed with deployment_authorization_unavailable before upload, build, payment, publication, or a live URL. Existing deployment records can still be observed.",
     "capabilities": ["App deployment", "Authentication", "Database", "Usage billing", "MCP tools"],
     "websiteURL": "https://semesh.io/",
     "privacyPolicyURL": "https://semesh.io/privacy",
     "termsOfServiceURL": "https://semesh.io/terms",
     "defaultPrompt": [
       "Deploy this app with Semesh, including login, a database, and usage billing.",
-      "Show me the Semesh capabilities for this task and quote any paid action first.",
+      "Find the Semesh Service Unit Action for this task and quote the exact Action input before invoking it.",
       "Turn this agent-built app into a paid product with end-user billing."
     ],
     "logo": "./assets/logo.png"

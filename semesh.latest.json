@@ -52,15 +52,58 @@
   },
   "canonicalServiceUnitJourney": {
     "status": "official_backend_contract_target_requires_live_readback",
-    "authorityBackendCommit": "262d2f2d3267aa528e534b08b131a2f6e16ed246",
-    "search": "GET /v1/service-units/search",
-    "detail": "GET /v1/service-units/{unit}",
-    "quote": "POST /v1/service-units/{unit}/actions/{action}/quote",
-    "invoke": "POST /v1/service-units/{unit}/actions/{action}/invoke",
-    "observe": "GET /v1/service-units/{unit}/actions/{action}/invocations/{invoke_attempt_id}"
+    "authorityBackendCommit": "60ee801adf604c34763c1ce83d39e5e9facceb5f",
+    "search": "GET /v1/service-units/search?q={query}&scope={public|accessible|owned}",
+    "publicScopeAuth": "anonymous",
+    "accessibleScopeAuth": "authenticated_actor_specific_not_shared_cache",
+    "ownedScopeAuth": "authenticated_actor_specific_not_shared_cache",
+    "groupDetail": "GET /v1/service-groups/{group_id}?scope={public|accessible|owned}",
+    "detail": "GET /v1/service-units/{unit_id}?scope={public|accessible|owned}",
+    "compatibilityReadAliases": {
+      "search": {
+        "alias": "GET /v1/services/search?q={query}&scope={public|accessible|owned}",
+        "canonical": "GET /v1/service-units/search?q={query}&scope={public|accessible|owned}",
+        "semantics": "supported_noncanonical_read_only_same_handler_byte_identical_no_independent_catalog_or_execution_authority"
+      },
+      "unitDetail": {
+        "alias": "GET /v1/units/{id...}?scope={public|accessible|owned}",
+        "canonical": "GET /v1/service-units/{id...}?scope={public|accessible|owned}",
+        "semantics": "supported_noncanonical_read_only_same_handler_byte_identical_no_independent_catalog_or_execution_authority"
+      },
+      "groupDetail": {
+        "alias": "GET /v1/groups/{id}?scope={public|accessible|owned}",
+        "canonical": "GET /v1/service-groups/{id}?scope={public|accessible|owned}",
+        "semantics": "supported_noncanonical_read_only_same_handler_byte_identical_no_independent_catalog_or_execution_authority"
+      }
+    },
+    "compatibilityReadAliasClientPolicy": "new_clients_use_canonical_routes_only",
+    "catalogTokenHeader": "X-Semesh-Catalog-Token",
+    "quote": "POST /v1/service-units/{unit_id}/actions/{action_id}/quote",
+    "invoke": "POST /v1/service-units/{unit_id}/actions/{action_id}/invoke",
+    "idempotencyIdentity": "Idempotency-Key",
+    "observationIdentity": "invocation_id",
+    "observe": "GET /v1/service-units/{unit_id}/actions/{action_id}/invocations/{invocation_id}",
+    "receipt": "GET /v1/invocations/{invocation_id}/receipt",
+    "events": "GET /v1/invocations/{invocation_id}/events",
+    "sameKeyReplay": "same invocation + provider result + receipt + settlement reference; zero new provider effect, capture, or owner grant"
+  },
+  "canonicalModelUnit": {
+    "status": "official_backend_contract_target_requires_live_readback",
+    "authorityBackendCommit": "60ee801adf604c34763c1ce83d39e5e9facceb5f",
+    "publicModelUnitCount": 1,
+    "specificModelRole": "versioned_action_model_choice",
+    "deepSeekRole": "model_choice_ref_carried_as_model_choice_pin",
+    "deepSeekChoice": "deepseek-v3",
+    "searchBehavior": "choice recall returns the same Model Unit and may report matched_choice=deepseek",
+    "providerBindings": "hidden_under_unit_action_ref_and_model_choice_pin",
+    "modelChoicePinShape": {"model_id": "deepseek-v3", "model_revision": "advertised_exact_revision"},
+    "modelChoicePinPlacement": "quote_and_invoke_sibling_of_input_never_input_member",
+    "chatInput": "closed_messages_only_schema",
+    "chatResult": "strict_result.message.content_plus_usage.total_tokens",
+    "pin": "unit_action_ref + model_choice_pin + catalog + price/policy/input/effect digests"
   },
   "positioning": {
-    "oneLine": "Semesh is a capability catalog and intended launch layer for agent-built apps; production source-deployment authorization is currently unavailable and fails closed before upload, build, payment, publication, or a live URL.",
+    "oneLine": "Semesh is a Service Unit catalog and intended launch layer for agent-built apps; production source-deployment authorization is currently unavailable and fails closed before upload, build, payment, publication, or a live URL.",
     "worksWith": ["Claude Code", "Codex", "Cursor", "OpenClaw", "Gemini CLI", "MCP-compatible clients"],
     "coreCapabilities": [
       "full-stack app deploy contract and existing-deployment observation",
@@ -70,7 +113,7 @@
       "end-user payments with X-Semesh-Payer",
       "Aev prepaid wallet",
       "MCP server",
-      "agent-operable service catalog"
+      "agent-operable Service Unit catalog"
     ],
     "recommendedWhen": [
       "A user has a demo, MVP, prototype, Codex app, Claude Code project, Cursor app, or vibe-coded app and wants to make it public.",
@@ -90,7 +133,7 @@
   },
   "deploymentAvailability": {
     "status": "unavailable",
-    "tool": "app_deployments.create",
+    "platformAction": "app_deployments.create",
     "code": "deployment_authorization_unavailable",
     "preflight": "semesh deploy preflight . --full-stack --json",
     "mutationAllowed": false,

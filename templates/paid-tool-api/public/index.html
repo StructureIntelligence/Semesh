@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>paid-tool-api — a metered API on Semesh</title>
+<title>paid-tool-api — receipt-settled summarization</title>
 <style>
   :root { color-scheme: light dark; }
   body { font: 16px/1.6 system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
   h1 { margin-bottom: .25rem; }
-  .sub { opacity: .7; margin-top: 0; }
+  .sub { opacity: .72; margin-top: 0; }
   pre { background: rgba(127,127,127,.12); padding: 1rem; border-radius: 8px; overflow-x: auto; }
   code { font-family: ui-monospace, monospace; }
   .pill { display: inline-block; font-size: .8rem; padding: .15rem .55rem; border-radius: 999px; background: rgba(127,127,127,.18); }
@@ -19,126 +19,196 @@
 </style>
 </head>
 <body>
-  <h1>paid-tool-api <span class="pill">metered</span></h1>
-  <p class="sub">One endpoint that summarizes text and requests delegated payment from the caller's Semesh wallet.</p>
+  <h1>paid-tool-api <span class="pill">Service Unit Action</span></h1>
+  <p class="sub">Summarize with a versioned DeepSeek choice inside Semesh’s single Model Unit.</p>
 
   <h2>Try it</h2>
   <p id="auth"></p>
-  <textarea id="text" rows="5" placeholder="Paste some text to summarize…"></textarea>
-  <p><button id="go">Summarize (paid)</button></p>
+  <textarea id="text" rows="5" maxlength="12000" placeholder="Paste some text to summarize…"></textarea>
+  <p><button id="go">Quote and summarize</button></p>
   <pre id="out"></pre>
 
-  <h2>Call it yourself</h2>
-  <p>Sign in once at <code>/__semesh/login</code>, then POST to the endpoint. The session cookie selects
-     your Semesh wallet as payer; final capture is shown only from trusted platform evidence.</p>
-  <pre><code>curl -X POST https://YOUR-APP.run.semesh.io/api/tool \
-  -H "Authorization: Bearer &lt;your-semesh-session-token&gt;" \
-  -H "Idempotency-Key: tool:&lt;one-stable-operation-id&gt;" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Long article here...","style":"bullets"}'</code></pre>
+  <h2>Two-phase app API</h2>
+  <p>Sign in at <code>/__semesh/login</code>. First POST the input to <code>/api/tool/quote</code> with
+    one stable <code>Idempotency-Key</code>. Persist the returned <code>prepared</code> bundle. Then POST
+    that unchanged bundle and the same key to <code>/api/tool/invoke</code>. Retry that POST only
+    while no Invocation ID is known; afterward <code>/api/tool/observe</code> performs canonical GET-only recovery.</p>
 
   <script>
-    const OPERATION_STORAGE_KEY = "semesh.paid-tool.pending-operation.v1";
-    function newOperationId() {
+    const STORAGE_KEY = "semesh.paid-tool.pending-request.v2";
+    const KEY_PATTERN = /^[A-Za-z0-9._:-]{8,200}$/;
+
+    function newRequestKey() {
       if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
         return "tool:" + globalThis.crypto.randomUUID();
       }
-      return "tool:" + Date.now() + ":" + Math.random().toString(36).slice(2);
+      const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+      return "tool:" + Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
     }
-    function loadOperation() {
+    function validPrepared(value, idempotencyKey) {
+      return value && typeof value === "object" && typeof value.action_path === "string" &&
+        typeof value.invoke_body === "string" && typeof value.deadline === "string" &&
+        value.idempotency_key === idempotencyKey && value.quote_evidence &&
+        typeof value.quote_evidence === "object" && /^hmac-sha256:[0-9a-f]{64}$/.test(value.prepared_seal) &&
+        Number.isSafeInteger(value.quoted_aev_atoms) &&
+        value.quoted_aev_atoms >= 0;
+    }
+    function validInvocationId(value, idempotencyKey) {
+      return typeof value === "string" && value.length > 0 && value.length <= 4096 &&
+        value === value.trim() && value !== idempotencyKey;
+    }
+    function formatAtoms(value) {
+      if (!Number.isSafeInteger(value) || value < 0) return "unknown";
+      const whole = Math.floor(value / 100000000);
+      const fraction = (value % 100000000).toString().padStart(8, "0").replace(/0+$/, "");
+      return fraction ? `${whole}.${fraction}` : String(whole);
+    }
+    function loadRequest() {
       try {
-        const value = JSON.parse(sessionStorage.getItem(OPERATION_STORAGE_KEY) || "null");
-        if (value && typeof value.id === "string" && value.input && typeof value.input.text === "string") return value;
+        const value = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null");
+        if (value && KEY_PATTERN.test(value.idempotencyKey) && value.input &&
+            typeof value.input.text === "string" && (!value.prepared || validPrepared(value.prepared, value.idempotencyKey)) &&
+            (!value.invocationId || validInvocationId(value.invocationId, value.idempotencyKey))) return value;
       } catch {}
+      sessionStorage.removeItem(STORAGE_KEY);
       return null;
     }
-    function storeOperation(value) {
-      if (value) sessionStorage.setItem(OPERATION_STORAGE_KEY, JSON.stringify(value));
-      else sessionStorage.removeItem(OPERATION_STORAGE_KEY);
+    function saveRequest(value) {
+      try {
+        if (value) {
+          const encoded = JSON.stringify(value);
+          sessionStorage.setItem(STORAGE_KEY, encoded);
+          return sessionStorage.getItem(STORAGE_KEY) === encoded;
+        }
+        sessionStorage.removeItem(STORAGE_KEY);
+        return sessionStorage.getItem(STORAGE_KEY) === null;
+      } catch { return false; }
     }
-    function reflectOperation(value) {
+    function persistKnownInvocation(value) {
+      if (saveRequest(value)) return "persisted";
+      // Never leave the older executable no-ID record behind after this tab has learned an ID.
+      // The in-memory request keeps the ID, so a same-tab retry can only take the observe path.
+      return saveRequest(null) ? "invalidated" : "unavailable";
+    }
+    function reflect(value) {
       const input = document.getElementById("text");
       const button = document.getElementById("go");
       input.readOnly = !!value;
       if (value) input.value = value.input.text;
-      button.textContent = value ? "Retry same operation" : "Summarize (paid)";
+      button.textContent = value
+        ? (value.invocationId ? "Observe same invocation" : "Retry same request")
+        : "Quote and summarize";
+    }
+    async function json(response) {
+      try { return await response.json(); } catch { return { error: "malformed_app_response" }; }
     }
 
-    let operation = loadOperation();
-    reflectOperation(operation);
-
-    fetch("/api/me").then(r => r.json()).then(m => {
-      document.getElementById("auth").innerHTML = m.logged_in
-        ? "✅ You're signed in — paid calls will use your wallet; final capture is reported separately."
-        : '🔒 <a href="/__semesh/login">Sign in with Semesh</a> to make a paid call.';
+    let request = loadRequest();
+    reflect(request);
+    fetch("/api/me").then(json).then(data => {
+      document.getElementById("auth").innerHTML = data.logged_in
+        ? "✅ Signed in — quote/invoke/observe are bound to your wallet."
+        : '🔒 <a href="/__semesh/login">Sign in with Semesh</a> to call this Action.';
     }).catch(() => {});
 
     document.getElementById("go").addEventListener("click", async () => {
       const out = document.getElementById("out");
-      out.textContent = "Working…";
-      if (!operation) {
-        const requestedText = document.getElementById("text").value.trim();
-        if (!requestedText) {
-          out.textContent = "Provide non-empty text before starting a paid operation.";
+      if (!request) {
+        const text = document.getElementById("text").value.trim();
+        if (!text) { out.textContent = "Provide non-empty text."; return; }
+        request = { idempotencyKey: newRequestKey(), input: { text, style: "tldr" }, prepared: null, invocationId: null };
+        if (!saveRequest(request)) {
+          request = null;
+          out.textContent = "Private request storage is unavailable. No quote or invoke was sent.";
+          reflect(null);
           return;
         }
-        if (requestedText.length > 12000) {
-          out.textContent = "Limit input to 12000 characters.";
-          return;
-        }
-        operation = {
-          id: newOperationId(),
-          input: { text: requestedText, style: "tldr" },
-        };
-        storeOperation(operation);
-        reflectOperation(operation);
+        reflect(request);
       }
       try {
-        const res = await fetch("/api/tool", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Idempotency-Key": operation.id },
-          body: JSON.stringify(operation.input),
-        });
-        const data = await res.json();
-        if (data.summary) {
-          const captured = data.settlement_status === "captured" &&
-            typeof data.captured_aev === "number" && Number.isFinite(data.captured_aev) && data.captured_aev >= 0;
-          if (captured) {
-            out.textContent = data.summary + `\n\n— ${data.captured_aev} Aev captured`;
-            operation = null;
-            storeOperation(null);
-            reflectOperation(null);
-          } else {
-            out.textContent = data.summary + `\n\n— settlement unknown for operation ${data.idempotency_key || operation.id}; use “Retry same operation” to resend the exact same input and Idempotency-Key, or inspect its platform record`;
-            reflectOperation(operation);
+        if (!request.prepared) {
+          out.textContent = "Anonymous Search/detail, then authenticated effect-zero quote…";
+          const quoted = await fetch("/api/tool/quote", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Idempotency-Key": request.idempotencyKey },
+            body: JSON.stringify(request.input),
+          });
+          const quote = await json(quoted);
+          if (!quoted.ok || !quote.ok || !validPrepared(quote.prepared, request.idempotencyKey)) {
+            out.textContent = `${quote.message || quote.error || "Quote unavailable."} No invoke was sent.`;
+            return;
           }
-        } else if (data.login) {
-          out.innerHTML = '🔒 <a href="' + data.login + '">Sign in with Semesh</a> first.';
-        } else {
-          const captured = data.settlement_status === "captured" &&
-            typeof data.captured_aev === "number" && Number.isFinite(data.captured_aev) && data.captured_aev >= 0;
-          out.textContent = captured
-            ? `Error: ${data.message || data.error || res.status} Trusted evidence reports ${data.captured_aev} Aev captured for operation ${data.idempotency_key || operation.id}; inspect its platform record before retrying.`
-            : `Error: ${data.message || data.error || res.status} Settlement is unknown for operation ${data.idempotency_key || operation.id}; use “Retry same operation” to resend the exact same input and Idempotency-Key, or inspect its platform record.`;
-          reflectOperation(operation);
+          request.prepared = quote.prepared;
+          if (!saveRequest(request)) {
+            request.prepared = null;
+            out.textContent = "The exact quote bundle could not be persisted. No invoke was sent.";
+            return;
+          }
+          out.textContent = `Quoted ${formatAtoms(quote.quoted_aev_atoms)} Aev. Invoking saved bytes…`;
         }
-      } catch (e) {
-        out.textContent = `Network outcome is unknown for operation ${operation.id}; use “Retry same operation” to resend the exact same input and Idempotency-Key, or inspect its platform record. ` + e.message;
-        reflectOperation(operation);
+        if (!saveRequest(request)) {
+          out.textContent = "The exact saved request failed readback. No invoke was sent.";
+          return;
+        }
+        const observing = validInvocationId(request.invocationId, request.idempotencyKey);
+        if (observing) out.textContent = `Observing Invocation ${request.invocationId} with canonical GETs…`;
+        const invoked = await fetch(observing ? "/api/tool/observe" : "/api/tool/invoke", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Idempotency-Key": request.idempotencyKey },
+          body: JSON.stringify({
+            style: request.input.style,
+            prepared: request.prepared,
+            ...(observing ? { invocation_id: request.invocationId } : {}),
+          }),
+        });
+        const data = await json(invoked);
+        if (typeof data.invocation_id === "string") {
+          if (!validInvocationId(data.invocation_id, request.idempotencyKey) ||
+              (request.invocationId && request.invocationId !== data.invocation_id)) {
+            out.textContent = "The app returned a conflicting Invocation identity. Keep the saved operation for reconciliation.";
+            return;
+          }
+          request.invocationId = data.invocation_id;
+          const persistence = persistKnownInvocation(request);
+          if (persistence !== "persisted") {
+            const storageWarning = persistence === "invalidated"
+              ? "The stale no-ID browser record was invalidated."
+              : "Browser storage could not be cleared; do not reload or retry from this browser state.";
+            out.textContent = `Invocation ${data.invocation_id} could not be persisted. ${storageWarning} Keep this tab open and record the ID.`;
+            return;
+          }
+          reflect(request);
+        }
+        if (!invoked.ok || !data.ok) {
+          out.textContent = `${data.message || data.error || invoked.status}\nSettlement: ${data.settlement_status || "unknown"}.\n` +
+            `Invocation: ${request.invocationId || "not returned"}. Replay key: ${request.idempotencyKey}.`;
+          return;
+        }
+        if ((data.settlement_status !== "captured" && data.settlement_status !== "released") ||
+            !Number.isSafeInteger(data.captured_aev_atoms) || data.captured_aev_atoms < 0) {
+          out.textContent = `Receipt is not terminal. Invocation: ${data.invocation_id}; keep the saved request.`;
+          return;
+        }
+        out.textContent = `${data.summary || "(empty result)"}\n\nReceipt captured ${formatAtoms(data.captured_aev_atoms)} Aev.\n` +
+          `Invocation: ${data.invocation_id} (distinct from replay key ${request.idempotencyKey}).`;
+        request = null;
+        saveRequest(null);
+        reflect(null);
+      } catch (error) {
+        const recovery = request.invocationId
+          ? "Retry observes that same Invocation through canonical GETs."
+          : "Retry reuses the saved invoke bytes and key.";
+        out.textContent = `Outcome unknown. ${recovery} Key: ${request.idempotencyKey}. ` +
+          `Invocation: ${request.invocationId || "not returned"}. ${error && error.message || ""}`;
       }
     });
   </script>
 
-  <!--
-    Optional badge — delete this <footer> block to remove it.
-    "Powered by Semesh" credit linking back to semesh.io.
-  -->
+  <!-- Optional badge: delete only this footer to remove it. -->
   <footer>
-    <a href="https://semesh.io/?utm_source=template&utm_medium=badge"
+    <a href="https://semesh.io/?utm_source=template&amp;utm_medium=badge"
        target="_blank" rel="noopener noreferrer"
-       style="font-size:.85rem; opacity:.55; text-decoration:none;">
-      ⚡ Powered by Semesh
-    </a>
+       style="font-size:.85rem; opacity:.55; text-decoration:none;">⚡ Powered by Semesh</a>
   </footer>
 </body>
 </html>
