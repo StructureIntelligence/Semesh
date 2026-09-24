@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 504 506" role="img" aria-label="Semesh">
+  <rect width="504" height="506" fill="#8ec8fb"/>
+  <g fill="#4fa9f8">
+    <rect x="127" width="51" height="506"/><rect x="329" width="51" height="506"/>
+    <rect y="129" width="504" height="49"/><rect y="328" width="504" height="49"/>
+  </g>
+  <g fill="#2c98f7">
+    <rect x="127" y="129" width="51" height="49"/><rect x="329" y="129" width="51" height="49"/>
+    <rect x="127" y="328" width="51" height="49"/><rect x="329" y="328" width="51" height="49"/>
+  </g>
+</svg>
